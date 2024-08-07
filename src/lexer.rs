@@ -80,6 +80,22 @@ impl<'a> LexerIterator<'a> {
                     TokenType::Bang
                 }
             }
+            '<' => {
+                if let Some('=') = self.chars.peek() {
+                    lexeme.extend(self.next_char());
+                    TokenType::LessEqual
+                } else {
+                    TokenType::Less
+                }
+            }
+            '>' => {
+                if let Some('=') = self.chars.peek() {
+                    lexeme.extend(self.next_char());
+                    TokenType::GreaterEqual
+                } else {
+                    TokenType::Greater
+                }
+            }
 
             _ => return Err(self.report_error(TokenErrorType::UnexpectedToken(lexeme.clone()))),
         };

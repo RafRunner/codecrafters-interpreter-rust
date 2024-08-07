@@ -22,6 +22,10 @@ pub enum TokenType {
     EqualEqual,
     Bang,
     BangEqual,
+    Less,
+    LessEqual,
+    Greater,
+    GreaterEqual,
 
     EOF,
 }
@@ -43,6 +47,10 @@ impl TokenType {
             TokenType::EqualEqual => "EQUAL_EQUAL",
             TokenType::Bang => "BANG",
             TokenType::BangEqual => "BANG_EQUAL",
+            TokenType::Less => "LESS",
+            TokenType::LessEqual => "LESS_EQUAL",
+            TokenType::Greater => "GREATER",
+            TokenType::GreaterEqual => "GREATER_EQUAL",
             TokenType::EOF => "EOF",
         }
     }
