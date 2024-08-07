@@ -93,10 +93,10 @@ impl<'a> Iterator for LexerIterator<'a> {
                 ';' => TokenType::Semicolon,
                 '*' => TokenType::Star,
 
-                '=' => self.try_match('=', &mut lexeme, TokenType::EqualEqual, TokenType::Equal),
-                '!' => self.try_match('=', &mut lexeme, TokenType::BangEqual, TokenType::Bang),
-                '<' => self.try_match('=', &mut lexeme, TokenType::LessEqual, TokenType::Less),
-                '>' => self.try_match(
+                '=' => self.if_match('=', &mut lexeme, TokenType::EqualEqual, TokenType::Equal),
+                '!' => self.if_match('=', &mut lexeme, TokenType::BangEqual, TokenType::Bang),
+                '<' => self.if_match('=', &mut lexeme, TokenType::LessEqual, TokenType::Less),
+                '>' => self.if_match(
                     '=',
                     &mut lexeme,
                     TokenType::GreaterEqual,
