@@ -16,6 +16,7 @@ pub enum TokenType {
     Plus,
     Star,
     Semicolon,
+    Slash,
 
     // One or two character tokens.
     Equal,
@@ -43,6 +44,7 @@ impl TokenType {
             TokenType::Plus => "PLUS",
             TokenType::Star => "STAR",
             TokenType::Semicolon => "SEMICOLON",
+            TokenType::Slash => "SLASH",
             TokenType::Equal => "EQUAL",
             TokenType::EqualEqual => "EQUAL_EQUAL",
             TokenType::Bang => "BANG",

@@ -43,65 +43,6 @@ impl<'a> LexerIterator<'a> {
 
         next
     }
-
-    fn report_error(&self, error: TokenErrorType) -> TokenError {
-        TokenError::new(error, self.line, self.column)
-    }
-
-    fn parse_token(&mut self, first: char) -> Result<Token, TokenError> {
-        let (start_line, start_col) = (self.line, self.column);
-        let mut lexeme = first.to_string();
-
-        let kind = match first {
-            '(' => TokenType::LeftParen,
-            ')' => TokenType::RightParen,
-            '{' => TokenType::LeftBrace,
-            '}' => TokenType::RightBrace,
-            ',' => TokenType::Comma,
-            '.' => TokenType::Dot,
-            '-' => TokenType::Minus,
-            '+' => TokenType::Plus,
-            ';' => TokenType::Semicolon,
-            '*' => TokenType::Star,
-
-            '=' => {
-                if let Some('=') = self.chars.peek() {
-                    lexeme.extend(self.next_char());
-                    TokenType::EqualEqual
-                } else {
-                    TokenType::Equal
-                }
-            }
-            '!' => {
-                if let Some('=') = self.chars.peek() {
-                    lexeme.extend(self.next_char());
-                    TokenType::BangEqual
-                } else {
-                    TokenType::Bang
-                }
-            }
-            '<' => {
-                if let Some('=') = self.chars.peek() {
-                    lexeme.extend(self.next_char());
-                    TokenType::LessEqual
-                } else {
-                    TokenType::Less
-                }
-            }
-            '>' => {
-                if let Some('=') = self.chars.peek() {
-                    lexeme.extend(self.next_char());
-                    TokenType::GreaterEqual
-                } else {
-                    TokenType::Greater
-                }
-            }
-
-            _ => return Err(self.report_error(TokenErrorType::UnexpectedToken(lexeme.clone()))),
-        };
-
-        Ok(Token::new(kind, lexeme, start_line, start_col))
-    }
 }
 
 impl<'a> Iterator for LexerIterator<'a> {
@@ -121,8 +62,79 @@ impl<'a> Iterator for LexerIterator<'a> {
             }
         }
 
-        let token = if let Some(next) = self.next_char() {
-            self.parse_token(next)
+        let token = if let Some(first) = self.next_char() {
+            let (start_line, start_col) = (self.line, self.column);
+            let mut lexeme = first.to_string();
+
+            let kind = match first {
+                '(' => TokenType::LeftParen,
+                ')' => TokenType::RightParen,
+                '{' => TokenType::LeftBrace,
+                '}' => TokenType::RightBrace,
+                ',' => TokenType::Comma,
+                '.' => TokenType::Dot,
+                '-' => TokenType::Minus,
+                '+' => TokenType::Plus,
+                ';' => TokenType::Semicolon,
+                '*' => TokenType::Star,
+
+                '=' => {
+                    if let Some('=') = self.chars.peek() {
+                        lexeme.extend(self.next_char());
+                        TokenType::EqualEqual
+                    } else {
+                        TokenType::Equal
+                    }
+                }
+                '!' => {
+                    if let Some('=') = self.chars.peek() {
+                        lexeme.extend(self.next_char());
+                        TokenType::BangEqual
+                    } else {
+                        TokenType::Bang
+                    }
+                }
+                '<' => {
+                    if let Some('=') = self.chars.peek() {
+                        lexeme.extend(self.next_char());
+                        TokenType::LessEqual
+                    } else {
+                        TokenType::Less
+                    }
+                }
+                '>' => {
+                    if let Some('=') = self.chars.peek() {
+                        lexeme.extend(self.next_char());
+                        TokenType::GreaterEqual
+                    } else {
+                        TokenType::Greater
+                    }
+                }
+                '/' => {
+                    // Ignoring comments
+                    if let Some('/') = self.chars.peek() {
+                        while let Some(c) = self.next_char() {
+                            if c == '\n' {
+                                break;
+                            }
+                        }
+
+                        return self.next();
+                    } else {
+                        TokenType::Slash
+                    }
+                }
+
+                _ => {
+                    return Some(Err(TokenError::new(
+                        TokenErrorType::UnexpectedToken(lexeme.clone()),
+                        start_line,
+                        start_col,
+                    )))
+                }
+            };
+
+            Ok(Token::new(kind, lexeme, start_line, start_col))
         } else {
             self.finished = true;
             Ok(Token::new(
