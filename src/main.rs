@@ -1,6 +1,8 @@
 use std::env;
 use std::fs;
 
+use interpreter_starter_rust::lexer::Lexer;
+
 fn main() {
     let args: Vec<String> = env::args().collect();
     if args.len() < 3 {
@@ -19,11 +21,14 @@ fn main() {
             let file_contents = fs::read_to_string(filename)
                 .unwrap_or_else(|_| panic!("Failed to read file {}", filename));
 
-            // Uncomment this block to pass the first stage
-            if !file_contents.is_empty() {
-                panic!("Scanner not implemented");
-            } else {
-                println!("EOF  null"); // Placeholder, remove this line when implementing the scanner
+            let lexer = Lexer::new(&file_contents);
+            let tokens: Vec<_> = lexer.iter().collect();
+
+            for token in tokens {
+                match token {
+                    Ok(token) => println!("{}", token),
+                    Err(e) => panic!("{}", e),
+                }
             }
         }
         _ => {
