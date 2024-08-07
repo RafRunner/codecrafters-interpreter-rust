@@ -20,6 +20,8 @@ pub enum TokenType {
     // One or two character tokens.
     Equal,
     EqualEqual,
+    Bang,
+    BangEqual,
 
     EOF,
 }
@@ -39,6 +41,8 @@ impl TokenType {
             TokenType::Semicolon => "SEMICOLON",
             TokenType::Equal => "EQUAL",
             TokenType::EqualEqual => "EQUAL_EQUAL",
+            TokenType::Bang => "BANG",
+            TokenType::BangEqual => "BANG_EQUAL",
             TokenType::EOF => "EOF",
         }
     }
