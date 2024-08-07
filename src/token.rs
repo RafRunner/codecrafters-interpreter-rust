@@ -86,11 +86,7 @@ impl TokenError {
 
 impl Display for TokenError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "[line {}] Error: {}",
-            self.line, self.error
-        )
+        write!(f, "[line {}] Error: {}", self.line, self.error)
     }
 }
 

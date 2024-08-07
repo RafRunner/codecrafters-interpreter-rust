@@ -20,12 +20,20 @@ fn main() {
 
             let lexer = Lexer::new(&file_contents);
             let tokens: Vec<_> = lexer.iter().collect();
+            let mut had_lexical_error = false;
 
             for token in tokens {
                 match token {
                     Ok(token) => println!("{}", token),
-                    Err(e) => eprintln!("{}", e),
+                    Err(e) => {
+                        had_lexical_error = true;
+                        eprintln!("{}", e);
+                    }
                 }
+            }
+
+            if had_lexical_error {
+                std::process::exit(65);
             }
         }
         _ => {
