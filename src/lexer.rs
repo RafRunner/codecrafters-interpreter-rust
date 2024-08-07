@@ -1,6 +1,6 @@
 use std::{iter::Peekable, str::Chars};
 
-use crate::token::{Token, TokenType};
+use crate::token::{Token, TokenError, TokenErrorType, TokenType};
 
 pub struct Lexer<'a> {
     source_code: &'a str,
@@ -22,7 +22,6 @@ impl<'a> Lexer<'a> {
 }
 
 pub struct LexerIterator<'a> {
-    // source_code: &'a str,
     chars: Peekable<Chars<'a>>,
     finished: bool,
     line: usize,
@@ -30,28 +29,28 @@ pub struct LexerIterator<'a> {
 }
 
 impl<'a> LexerIterator<'a> {
-    fn update_position(&mut self, c: char) {
-        if c == '\n' {
-            self.line += 1;
-            self.column = 0;
-        } else {
-            self.column += 1;
-        }
-    }
-
     fn next_char(&mut self) -> Option<char> {
         let next = self.chars.next();
 
         if let Some(c) = next {
-            self.update_position(c)
+            if c == '\n' {
+                self.line += 1;
+                self.column = 0;
+            } else {
+                self.column += 1;
+            }
         }
 
         next
     }
+
+    fn report_error(&self, error: TokenErrorType) -> TokenError {
+        TokenError::new(error, self.line, self.column)
+    }
 }
 
 impl<'a> Iterator for LexerIterator<'a> {
-    type Item = Result<Token, String>;
+    type Item = Result<Token, TokenError>;
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.finished {
@@ -59,8 +58,8 @@ impl<'a> Iterator for LexerIterator<'a> {
         }
 
         // Ignoring whitespace
-        while let Some(next) = self.chars.peek().cloned() {
-            if next.is_whitespace() {
+        while let Some(peek) = self.chars.peek() {
+            if peek.is_whitespace() {
                 self.next_char();
             } else {
                 break;
@@ -72,13 +71,20 @@ impl<'a> Iterator for LexerIterator<'a> {
             let next_token = match next {
                 '(' => Ok(TokenType::LeftParen),
                 ')' => Ok(TokenType::RightParen),
-                _ => Err(format!("Invalid token at line {}, column {}: {}", self.line, self.column, next)),
+                '{' => Ok(TokenType::LeftBrace),
+                '}' => Ok(TokenType::RightBrace),
+                _ => Err(self.report_error(TokenErrorType::UnexpectedToken(lexeme.clone()))),
             };
 
             next_token.map(|kind| Token::new(kind, lexeme, self.line, self.column))
         } else {
             self.finished = true;
-            Ok(Token::new(TokenType::EOF, String::new(), self.line, self.column))
+            Ok(Token::new(
+                TokenType::EOF,
+                String::new(),
+                self.line,
+                self.column,
+            ))
         };
 
         Some(token)
