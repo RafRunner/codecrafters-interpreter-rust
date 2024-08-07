@@ -9,6 +9,12 @@ pub enum TokenType {
     RightParen,
     LeftBrace,
     RightBrace,
+    Comma,
+    Dot,
+    Minus,
+    Plus,
+    Star,
+    Semicolon,
     EOF,
 }
 
@@ -19,6 +25,12 @@ impl TokenType {
             TokenType::RightParen => "RIGHT_PAREN",
             TokenType::LeftBrace => "LEFT_BRACE",
             TokenType::RightBrace => "RIGHT_BRACE",
+            TokenType::Comma => "COMMA",
+            TokenType::Dot => "DOT",
+            TokenType::Minus => "MINUS",
+            TokenType::Plus => "PLUS",
+            TokenType::Star => "STAR",
+            TokenType::Semicolon => "SEMICOLON",
             TokenType::EOF => "EOF",
         }
     }

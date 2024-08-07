@@ -73,6 +73,12 @@ impl<'a> Iterator for LexerIterator<'a> {
                 ')' => Ok(TokenType::RightParen),
                 '{' => Ok(TokenType::LeftBrace),
                 '}' => Ok(TokenType::RightBrace),
+                ',' => Ok(TokenType::Comma),
+                '.' => Ok(TokenType::Dot),
+                '-' => Ok(TokenType::Minus),
+                '+' => Ok(TokenType::Plus),
+                ';' => Ok(TokenType::Semicolon),
+                '*' => Ok(TokenType::Star),
                 _ => Err(self.report_error(TokenErrorType::UnexpectedToken(lexeme.clone()))),
             };
 
