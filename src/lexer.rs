@@ -43,6 +43,21 @@ impl<'a> LexerIterator<'a> {
 
         next
     }
+
+    fn if_match(
+        &mut self,
+        test: char,
+        lexeme: &mut String,
+        success: TokenType,
+        fail: TokenType,
+    ) -> TokenType {
+        if self.chars.peek().map(|&c| c == test).unwrap_or(false) {
+            lexeme.extend(self.next_char());
+            success
+        } else {
+            fail
+        }
+    }
 }
 
 impl<'a> Iterator for LexerIterator<'a> {
@@ -78,38 +93,15 @@ impl<'a> Iterator for LexerIterator<'a> {
                 ';' => TokenType::Semicolon,
                 '*' => TokenType::Star,
 
-                '=' => {
-                    if let Some('=') = self.chars.peek() {
-                        lexeme.extend(self.next_char());
-                        TokenType::EqualEqual
-                    } else {
-                        TokenType::Equal
-                    }
-                }
-                '!' => {
-                    if let Some('=') = self.chars.peek() {
-                        lexeme.extend(self.next_char());
-                        TokenType::BangEqual
-                    } else {
-                        TokenType::Bang
-                    }
-                }
-                '<' => {
-                    if let Some('=') = self.chars.peek() {
-                        lexeme.extend(self.next_char());
-                        TokenType::LessEqual
-                    } else {
-                        TokenType::Less
-                    }
-                }
-                '>' => {
-                    if let Some('=') = self.chars.peek() {
-                        lexeme.extend(self.next_char());
-                        TokenType::GreaterEqual
-                    } else {
-                        TokenType::Greater
-                    }
-                }
+                '=' => self.try_match('=', &mut lexeme, TokenType::EqualEqual, TokenType::Equal),
+                '!' => self.try_match('=', &mut lexeme, TokenType::BangEqual, TokenType::Bang),
+                '<' => self.try_match('=', &mut lexeme, TokenType::LessEqual, TokenType::Less),
+                '>' => self.try_match(
+                    '=',
+                    &mut lexeme,
+                    TokenType::GreaterEqual,
+                    TokenType::Greater,
+                ),
                 '/' => {
                     // Ignoring comments
                     if let Some('/') = self.chars.peek() {
@@ -122,6 +114,25 @@ impl<'a> Iterator for LexerIterator<'a> {
                         return self.next();
                     } else {
                         TokenType::Slash
+                    }
+                }
+
+                '"' => {
+                    while let Some(c) = self.next_char() {
+                        lexeme.push(c);
+                        if c == '"' {
+                            break;
+                        }
+                    }
+
+                    if !lexeme.ends_with('"') {
+                        return Some(Err(TokenError::new(
+                            TokenErrorType::UnterminatedString,
+                            start_line,
+                            start_col,
+                        )));
+                    } else {
+                        TokenType::String(lexeme[1..lexeme.len() - 1].to_string())
                     }
                 }
 

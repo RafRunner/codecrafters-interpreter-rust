@@ -28,6 +28,9 @@ pub enum TokenType {
     Greater,
     GreaterEqual,
 
+    // Literals.
+    String(String),
+
     EOF,
 }
 
@@ -53,6 +56,7 @@ impl TokenType {
             TokenType::LessEqual => "LESS_EQUAL",
             TokenType::Greater => "GREATER",
             TokenType::GreaterEqual => "GREATER_EQUAL",
+            TokenType::String(..) => "STRING",
             TokenType::EOF => "EOF",
         }
     }
@@ -85,7 +89,18 @@ impl Token {
 
 impl Display for Token {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{} {} null", self.kind.display_name(), self.lexeme)
+        let literal = match &self.kind {
+            TokenType::String(literal) => literal,
+            _ => "null",
+        };
+
+        write!(
+            f,
+            "{} {} {}",
+            self.kind.display_name(),
+            self.lexeme,
+            literal
+        )
     }
 }
 
@@ -122,4 +137,7 @@ impl Error for TokenError {
 pub enum TokenErrorType {
     #[error("Unexpected character: {0}")]
     UnexpectedToken(String),
+
+    #[error("Unterminated string.")]
+    UnterminatedString,
 }
