@@ -88,8 +88,8 @@ impl Display for TokenError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "[line {} col {}] Error: {}",
-            self.line, self.column, self.error
+            "[line {}] Error: {}",
+            self.line, self.error
         )
     }
 }
@@ -102,6 +102,6 @@ impl Error for TokenError {
 
 #[derive(thiserror::Error, Debug)]
 pub enum TokenErrorType {
-    #[error("Unexpected token \"{0}\"")]
+    #[error("Unexpected character: {0}")]
     UnexpectedToken(String),
 }

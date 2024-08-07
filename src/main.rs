@@ -24,7 +24,7 @@ fn main() {
             for token in tokens {
                 match token {
                     Ok(token) => println!("{}", token),
-                    Err(e) => panic!("{}", e),
+                    Err(e) => eprintln!("{}", e),
                 }
             }
         }
