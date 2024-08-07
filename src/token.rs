@@ -5,6 +5,7 @@ use std::{
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum TokenType {
+    // Single-character tokens.
     LeftParen,
     RightParen,
     LeftBrace,
@@ -15,6 +16,11 @@ pub enum TokenType {
     Plus,
     Star,
     Semicolon,
+
+    // One or two character tokens.
+    Equal,
+    EqualEqual,
+
     EOF,
 }
 
@@ -31,6 +37,8 @@ impl TokenType {
             TokenType::Plus => "PLUS",
             TokenType::Star => "STAR",
             TokenType::Semicolon => "SEMICOLON",
+            TokenType::Equal => "EQUAL",
+            TokenType::EqualEqual => "EQUAL_EQUAL",
             TokenType::EOF => "EOF",
         }
     }

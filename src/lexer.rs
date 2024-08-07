@@ -47,6 +47,37 @@ impl<'a> LexerIterator<'a> {
     fn report_error(&self, error: TokenErrorType) -> TokenError {
         TokenError::new(error, self.line, self.column)
     }
+
+    fn parse_token(&mut self, first: char) -> Result<Token, TokenError> {
+        let (start_line, start_col) = (self.line, self.column);
+        let mut lexeme = first.to_string();
+
+        let kind = match first {
+            '(' => TokenType::LeftParen,
+            ')' => TokenType::RightParen,
+            '{' => TokenType::LeftBrace,
+            '}' => TokenType::RightBrace,
+            ',' => TokenType::Comma,
+            '.' => TokenType::Dot,
+            '-' => TokenType::Minus,
+            '+' => TokenType::Plus,
+            ';' => TokenType::Semicolon,
+            '*' => TokenType::Star,
+
+            '=' => {
+                if let Some('=') = self.chars.peek() {
+                    lexeme.extend(self.next_char());
+                    TokenType::EqualEqual
+                } else {
+                    TokenType::Equal
+                }
+            }
+
+            _ => return Err(self.report_error(TokenErrorType::UnexpectedToken(lexeme.clone()))),
+        };
+
+        Ok(Token::new(kind, lexeme, start_line, start_col))
+    }
 }
 
 impl<'a> Iterator for LexerIterator<'a> {
@@ -67,22 +98,7 @@ impl<'a> Iterator for LexerIterator<'a> {
         }
 
         let token = if let Some(next) = self.next_char() {
-            let lexeme = next.to_string();
-            let next_token = match next {
-                '(' => Ok(TokenType::LeftParen),
-                ')' => Ok(TokenType::RightParen),
-                '{' => Ok(TokenType::LeftBrace),
-                '}' => Ok(TokenType::RightBrace),
-                ',' => Ok(TokenType::Comma),
-                '.' => Ok(TokenType::Dot),
-                '-' => Ok(TokenType::Minus),
-                '+' => Ok(TokenType::Plus),
-                ';' => Ok(TokenType::Semicolon),
-                '*' => Ok(TokenType::Star),
-                _ => Err(self.report_error(TokenErrorType::UnexpectedToken(lexeme.clone()))),
-            };
-
-            next_token.map(|kind| Token::new(kind, lexeme, self.line, self.column))
+            self.parse_token(next)
         } else {
             self.finished = true;
             Ok(Token::new(
