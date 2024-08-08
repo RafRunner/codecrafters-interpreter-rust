@@ -188,15 +188,10 @@ impl<'a> Iterator for LexerIterator<'a> {
                 }
             };
 
-            Ok(Token::new(kind, self.lexeme.clone(), start_line, start_col))
+            Ok(Token::new(kind, &self.lexeme, start_line, start_col))
         } else {
             self.finished = true;
-            Ok(Token::new(
-                TokenType::EOF,
-                String::new(),
-                self.line,
-                self.column + 1,
-            ))
+            Ok(Token::new(TokenType::EOF, "", self.line, self.column + 1))
         };
 
         Some(token)
@@ -227,47 +222,17 @@ mod tests {
         let tokens = test_lexer_no_errors(source);
 
         assert_eq!(tokens.len(), 11);
-        assert_eq!(
-            tokens[0],
-            Token::new(TokenType::LeftParen, "(".to_string(), 1, 1)
-        );
-        assert_eq!(
-            tokens[1],
-            Token::new(TokenType::RightParen, ")".to_string(), 1, 2)
-        );
-        assert_eq!(
-            tokens[2],
-            Token::new(TokenType::LeftBrace, "{".to_string(), 1, 3)
-        );
-        assert_eq!(
-            tokens[3],
-            Token::new(TokenType::RightBrace, "}".to_string(), 1, 4)
-        );
-        assert_eq!(
-            tokens[4],
-            Token::new(TokenType::Comma, ",".to_string(), 1, 5)
-        );
-        assert_eq!(tokens[5], Token::new(TokenType::Dot, ".".to_string(), 1, 6));
-        assert_eq!(
-            tokens[6],
-            Token::new(TokenType::Minus, "-".to_string(), 1, 7)
-        );
-        assert_eq!(
-            tokens[7],
-            Token::new(TokenType::Plus, "+".to_string(), 1, 8)
-        );
-        assert_eq!(
-            tokens[8],
-            Token::new(TokenType::Star, "*".to_string(), 1, 9)
-        );
-        assert_eq!(
-            tokens[9],
-            Token::new(TokenType::Semicolon, ";".to_string(), 1, 10)
-        );
-        assert_eq!(
-            tokens[10],
-            Token::new(TokenType::EOF, "".to_string(), 1, 11)
-        );
+        assert_eq!(tokens[0], Token::new(TokenType::LeftParen, "(", 1, 1));
+        assert_eq!(tokens[1], Token::new(TokenType::RightParen, ")", 1, 2));
+        assert_eq!(tokens[2], Token::new(TokenType::LeftBrace, "{", 1, 3));
+        assert_eq!(tokens[3], Token::new(TokenType::RightBrace, "}", 1, 4));
+        assert_eq!(tokens[4], Token::new(TokenType::Comma, ",", 1, 5));
+        assert_eq!(tokens[5], Token::new(TokenType::Dot, ".", 1, 6));
+        assert_eq!(tokens[6], Token::new(TokenType::Minus, "-", 1, 7));
+        assert_eq!(tokens[7], Token::new(TokenType::Plus, "+", 1, 8));
+        assert_eq!(tokens[8], Token::new(TokenType::Star, "*", 1, 9));
+        assert_eq!(tokens[9], Token::new(TokenType::Semicolon, ";", 1, 10));
+        assert_eq!(tokens[10], Token::new(TokenType::EOF, "", 1, 11));
     }
 
     #[test]
@@ -276,27 +241,12 @@ mod tests {
         let tokens = test_lexer_no_errors(source);
 
         assert_eq!(tokens.len(), 6);
-        assert_eq!(
-            tokens[0],
-            Token::new(TokenType::EqualEqual, "==".to_string(), 1, 1)
-        );
-        assert_eq!(
-            tokens[1],
-            Token::new(TokenType::Equal, "=".to_string(), 1, 3)
-        );
-        assert_eq!(
-            tokens[2],
-            Token::new(TokenType::BangEqual, "!=".to_string(), 1, 5)
-        );
-        assert_eq!(
-            tokens[3],
-            Token::new(TokenType::LessEqual, "<=".to_string(), 2, 1)
-        );
-        assert_eq!(
-            tokens[4],
-            Token::new(TokenType::GreaterEqual, ">=".to_string(), 2, 4)
-        );
-        assert_eq!(tokens[5], Token::new(TokenType::EOF, "".to_string(), 3, 1));
+        assert_eq!(tokens[0], Token::new(TokenType::EqualEqual, "==", 1, 1));
+        assert_eq!(tokens[1], Token::new(TokenType::Equal, "=", 1, 3));
+        assert_eq!(tokens[2], Token::new(TokenType::BangEqual, "!=", 1, 5));
+        assert_eq!(tokens[3], Token::new(TokenType::LessEqual, "<=", 2, 1));
+        assert_eq!(tokens[4], Token::new(TokenType::GreaterEqual, ">=", 2, 4));
+        assert_eq!(tokens[5], Token::new(TokenType::EOF, "", 3, 1));
     }
 
     #[test]
@@ -307,60 +257,36 @@ mod tests {
         assert_eq!(tokens.len(), 5);
         assert_eq!(
             tokens[0],
-            Token::new(
-                TokenType::String("hello".to_string()),
-                "\"hello\"".to_string(),
-                1,
-                1
-            )
+            Token::new(TokenType::String("hello".to_string()), "\"hello\"", 1, 1)
         );
-        assert_eq!(
-            tokens[1],
-            Token::new(TokenType::Identifier, "name".to_string(), 1, 8)
-        );
-        assert_eq!(
-            tokens[2],
-            Token::new(TokenType::Equal, "=".to_string(), 1, 12)
-        );
+        assert_eq!(tokens[1], Token::new(TokenType::Identifier, "name", 1, 8));
+        assert_eq!(tokens[2], Token::new(TokenType::Equal, "=", 1, 12));
         assert_eq!(
             tokens[3],
-            Token::new(
-                TokenType::String("world".to_string()),
-                "\"world\"".to_string(),
-                1,
-                13
-            )
+            Token::new(TokenType::String("world".to_string()), "\"world\"", 1, 13)
         );
-        assert_eq!(tokens[4], Token::new(TokenType::EOF, "".to_string(), 1, 20));
+        assert_eq!(tokens[4], Token::new(TokenType::EOF, "", 1, 20));
     }
 
     #[test]
     fn test_numbers() {
-        let source = "123 456.789 12.34.56";
+        let source = "123 456.789+12.34.56";
         let tokens = test_lexer_no_errors(source);
 
-        assert_eq!(tokens.len(), 6);
-        assert_eq!(
-            tokens[0],
-            Token::new(TokenType::Number(123.0), "123".to_string(), 1, 1)
-        );
+        assert_eq!(tokens.len(), 7);
+        assert_eq!(tokens[0], Token::new(TokenType::Number(123.0), "123", 1, 1));
         assert_eq!(
             tokens[1],
-            Token::new(TokenType::Number(456.789), "456.789".to_string(), 1, 5)
+            Token::new(TokenType::Number(456.789), "456.789", 1, 5)
         );
-        assert_eq!(
-            tokens[2],
-            Token::new(TokenType::Number(12.34), "12.34".to_string(), 1, 13)
-        );
+        assert_eq!(tokens[2], Token::new(TokenType::Plus, "+", 1, 12));
         assert_eq!(
             tokens[3],
-            Token::new(TokenType::Dot, ".".to_string(), 1, 18)
+            Token::new(TokenType::Number(12.34), "12.34", 1, 13)
         );
-        assert_eq!(
-            tokens[4],
-            Token::new(TokenType::Number(56.0), "56".to_string(), 1, 19)
-        );
-        assert_eq!(tokens[5], Token::new(TokenType::EOF, "".to_string(), 1, 21));
+        assert_eq!(tokens[4], Token::new(TokenType::Dot, ".", 1, 18));
+        assert_eq!(tokens[5], Token::new(TokenType::Number(56.0), "56", 1, 19));
+        assert_eq!(tokens[6], Token::new(TokenType::EOF, "", 1, 21));
     }
 
     #[test]
@@ -369,11 +295,8 @@ mod tests {
         let tokens = test_lexer_no_errors(source);
 
         assert_eq!(tokens.len(), 2);
-        assert_eq!(
-            tokens[0],
-            Token::new(TokenType::Number(123.0), "123".to_string(), 2, 1)
-        );
-        assert_eq!(tokens[1], Token::new(TokenType::EOF, "".to_string(), 2, 4));
+        assert_eq!(tokens[0], Token::new(TokenType::Number(123.0), "123", 2, 1));
+        assert_eq!(tokens[1], Token::new(TokenType::EOF, "", 2, 4));
     }
 
     #[test]
@@ -386,10 +309,7 @@ mod tests {
             tokens[0],
             Err(TokenError::new(TokenErrorType::UnterminatedString, 1, 1))
         );
-        assert_eq!(
-            tokens[1],
-            Ok(Token::new(TokenType::EOF, "".to_string(), 1, 32))
-        );
+        assert_eq!(tokens[1], Ok(Token::new(TokenType::EOF, "", 1, 32)));
     }
 
     #[test]
@@ -406,23 +326,12 @@ mod tests {
                 1
             ))
         );
-        assert_eq!(
-            tokens[1],
-            Ok(Token::new(TokenType::Plus, "+".to_string(), 1, 2))
-        );
+        assert_eq!(tokens[1], Ok(Token::new(TokenType::Plus, "+", 1, 2)));
         assert_eq!(
             tokens[2],
-            Ok(Token::new(
-                TokenType::Identifier,
-                "orchid".to_string(),
-                1,
-                3
-            ))
+            Ok(Token::new(TokenType::Identifier, "orchid", 1, 3))
         );
-        assert_eq!(
-            tokens[3],
-            Ok(Token::new(TokenType::EOF, "".to_string(), 1, 9))
-        );
+        assert_eq!(tokens[3], Ok(Token::new(TokenType::EOF, "", 1, 9)));
     }
 
     #[test]
@@ -431,23 +340,11 @@ mod tests {
         let tokens = test_lexer_no_errors(source);
 
         assert_eq!(tokens.len(), 5);
-        assert_eq!(
-            tokens[0],
-            Token::new(TokenType::Class, "class".to_string(), 1, 1)
-        );
-        assert_eq!(
-            tokens[1],
-            Token::new(TokenType::Var, "var".to_string(), 1, 7)
-        );
-        assert_eq!(
-            tokens[2],
-            Token::new(TokenType::If, "if".to_string(), 1, 11)
-        );
-        assert_eq!(
-            tokens[3],
-            Token::new(TokenType::Else, "else".to_string(), 1, 14)
-        );
-        assert_eq!(tokens[4], Token::new(TokenType::EOF, "".to_string(), 1, 18));
+        assert_eq!(tokens[0], Token::new(TokenType::Class, "class", 1, 1));
+        assert_eq!(tokens[1], Token::new(TokenType::Var, "var", 1, 7));
+        assert_eq!(tokens[2], Token::new(TokenType::If, "if", 1, 11));
+        assert_eq!(tokens[3], Token::new(TokenType::Else, "else", 1, 14));
+        assert_eq!(tokens[4], Token::new(TokenType::EOF, "", 1, 18));
     }
 
     #[test]
@@ -456,47 +353,17 @@ mod tests {
         let tokens = test_lexer_no_errors(source);
 
         assert_eq!(tokens.len(), 12);
-        assert_eq!(
-            tokens[0],
-            Token::new(TokenType::Identifier, "andor".to_string(), 1, 1)
-        );
-        assert_eq!(
-            tokens[1],
-            Token::new(TokenType::Number(3.0), "3".to_string(), 1, 7)
-        );
-        assert_eq!(
-            tokens[2],
-            Token::new(TokenType::Dot, ".".to_string(), 1, 8)
-        );
-        assert_eq!(
-            tokens[3],
-            Token::new(TokenType::Print, "print".to_string(), 2, 1)
-        );
-        assert_eq!(
-            tokens[4],
-            Token::new(TokenType::Minus, "-".to_string(), 2, 7)
-        );
-        assert_eq!(
-            tokens[5],
-            Token::new(TokenType::Identifier, "n".to_string(), 2, 8)
-        );
-        assert_eq!(tokens[6], Token::new(TokenType::Dot, ".".to_string(), 2, 9));
-        assert_eq!(
-            tokens[7],
-            Token::new(TokenType::Identifier, "abs".to_string(), 2, 10)
-        );
-        assert_eq!(
-            tokens[8],
-            Token::new(TokenType::LeftParen, "(".to_string(), 2, 13)
-        );
-        assert_eq!(
-            tokens[9],
-            Token::new(TokenType::RightParen, ")".to_string(), 2, 14)
-        );
-        assert_eq!(
-            tokens[10],
-            Token::new(TokenType::Semicolon, ";".to_string(), 2, 15)
-        );
-        assert_eq!(tokens[11], Token::new(TokenType::EOF, "".to_string(), 3, 1));
+        assert_eq!(tokens[0], Token::new(TokenType::Identifier, "andor", 1, 1));
+        assert_eq!(tokens[1], Token::new(TokenType::Number(3.0), "3", 1, 7));
+        assert_eq!(tokens[2], Token::new(TokenType::Dot, ".", 1, 8));
+        assert_eq!(tokens[3], Token::new(TokenType::Print, "print", 2, 1));
+        assert_eq!(tokens[4], Token::new(TokenType::Minus, "-", 2, 7));
+        assert_eq!(tokens[5], Token::new(TokenType::Identifier, "n", 2, 8));
+        assert_eq!(tokens[6], Token::new(TokenType::Dot, ".", 2, 9));
+        assert_eq!(tokens[7], Token::new(TokenType::Identifier, "abs", 2, 10));
+        assert_eq!(tokens[8], Token::new(TokenType::LeftParen, "(", 2, 13));
+        assert_eq!(tokens[9], Token::new(TokenType::RightParen, ")", 2, 14));
+        assert_eq!(tokens[10], Token::new(TokenType::Semicolon, ";", 2, 15));
+        assert_eq!(tokens[11], Token::new(TokenType::EOF, "", 3, 1));
     }
 }
