@@ -14,6 +14,7 @@ impl<'a> Lexer<'a> {
     pub fn iter(&self) -> LexerIterator<'a> {
         LexerIterator {
             chars: self.source_code.chars().peekable(),
+            lexeme: String::new(),
             finished: false,
             line: 1,
             column: 0,
@@ -23,6 +24,7 @@ impl<'a> Lexer<'a> {
 
 pub struct LexerIterator<'a> {
     chars: Peekable<Chars<'a>>,
+    lexeme: String,
     finished: bool,
     line: usize,
     column: usize,
@@ -44,18 +46,18 @@ impl<'a> LexerIterator<'a> {
         next
     }
 
-    fn if_match(
-        &mut self,
-        test: char,
-        lexeme: &mut String,
-        success: TokenType,
-        fail: TokenType,
-    ) -> TokenType {
-        if self.chars.peek().map(|&c| c == test).unwrap_or(false) {
-            lexeme.extend(self.next_char());
+    fn if_next(&mut self, test: char, success: TokenType, fail: TokenType) -> TokenType {
+        if self.chars.peek().map_or(false, |&c| c == test) {
+            self.consume_char();
             success
         } else {
             fail
+        }
+    }
+
+    fn consume_char(&mut self) {
+        if let Some(next) = self.next_char() {
+            self.lexeme.push(next);
         }
     }
 }
@@ -79,7 +81,7 @@ impl<'a> Iterator for LexerIterator<'a> {
 
         let token = if let Some(first) = self.next_char() {
             let (start_line, start_col) = (self.line, self.column);
-            let mut lexeme = first.to_string();
+            self.lexeme = first.to_string();
 
             let kind = match first {
                 '(' => TokenType::LeftParen,
@@ -93,15 +95,10 @@ impl<'a> Iterator for LexerIterator<'a> {
                 ';' => TokenType::Semicolon,
                 '*' => TokenType::Star,
 
-                '=' => self.if_match('=', &mut lexeme, TokenType::EqualEqual, TokenType::Equal),
-                '!' => self.if_match('=', &mut lexeme, TokenType::BangEqual, TokenType::Bang),
-                '<' => self.if_match('=', &mut lexeme, TokenType::LessEqual, TokenType::Less),
-                '>' => self.if_match(
-                    '=',
-                    &mut lexeme,
-                    TokenType::GreaterEqual,
-                    TokenType::Greater,
-                ),
+                '=' => self.if_next('=', TokenType::EqualEqual, TokenType::Equal),
+                '!' => self.if_next('=', TokenType::BangEqual, TokenType::Bang),
+                '<' => self.if_next('=', TokenType::LessEqual, TokenType::Less),
+                '>' => self.if_next('=', TokenType::GreaterEqual, TokenType::Greater),
                 '/' => {
                     // Ignoring comments
                     if let Some('/') = self.chars.peek() {
@@ -119,40 +116,39 @@ impl<'a> Iterator for LexerIterator<'a> {
 
                 '"' => {
                     while let Some(c) = self.next_char() {
-                        lexeme.push(c);
+                        self.lexeme.push(c);
                         if c == '"' {
                             break;
                         }
                     }
 
-                    if !lexeme.ends_with('"') || lexeme.len() < 2 {
+                    if !self.lexeme.ends_with('"') || self.lexeme.len() < 2 {
                         return Some(Err(TokenError::new(
                             TokenErrorType::UnterminatedString,
                             start_line,
                             start_col,
                         )));
                     } else {
-                        TokenType::String(lexeme[1..lexeme.len() - 1].to_string())
+                        TokenType::String(self.lexeme[1..self.lexeme.len() - 1].to_string())
                     }
                 }
                 c if c.is_ascii_digit() => {
                     while let Some(c) = self.chars.peek() {
                         if c.is_ascii_digit() {
-                            lexeme.extend(self.next_char());
+                            self.consume_char();
                         } else if *c == '.' {
                             if self
                                 .chars
                                 .clone()
                                 .nth(2)
-                                .map(|c| c.is_ascii_digit())
-                                .unwrap_or(false)
+                                .map_or(false, |c| c.is_ascii_digit())
                             {
                                 // Consume the "."
-                                lexeme.extend(self.next_char());
+                                self.consume_char();
 
                                 while let Some(c) = self.chars.peek() {
                                     if c.is_ascii_digit() {
-                                        lexeme.extend(self.next_char())
+                                        self.consume_char();
                                     } else {
                                         break;
                                     }
@@ -165,58 +161,342 @@ impl<'a> Iterator for LexerIterator<'a> {
                         }
                     }
 
-                    TokenType::Number(lexeme.parse().expect("lexeme should be a valid number"))
+                    TokenType::Number(
+                        self.lexeme
+                            .parse()
+                            .expect("lexeme should be a valid number"),
+                    )
                 }
                 c if c.is_ascii_alphabetic() || c == '_' => {
                     while let Some(c) = self.chars.peek() {
                         if c.is_ascii_alphanumeric() || *c == '_' {
-                            lexeme.extend(self.next_char())
+                            self.consume_char();
                         } else {
                             break;
                         }
                     }
-                    
-                    match lexeme.as_str() {
-                        "and" => TokenType::And,
-                        "class" => TokenType::Class,
-                        "else" => TokenType::Else,
-                        "false" => TokenType::False,
-                        "for" => TokenType::For,
-                        "fun" => TokenType::Fun,
-                        "if" => TokenType::If,
-                        "nil" => TokenType::Nil,
-                        "or" => TokenType::Or,
-                        "print" => TokenType::Print,
-                        "return" => TokenType::Return,
-                        "super" => TokenType::Super,
-                        "this" => TokenType::This,
-                        "true" => TokenType::True,
-                        "var" => TokenType::Var,
-                        "while" => TokenType::While,
-                        _ => TokenType::Identifier,
-                    }
+
+                    TokenType::check_reserved_word(&self.lexeme).unwrap_or(TokenType::Identifier)
                 }
 
                 _ => {
                     return Some(Err(TokenError::new(
-                        TokenErrorType::UnexpectedToken(lexeme.clone()),
+                        TokenErrorType::UnexpectedToken(self.lexeme.clone()),
                         start_line,
                         start_col,
                     )))
                 }
             };
 
-            Ok(Token::new(kind, lexeme, start_line, start_col))
+            Ok(Token::new(kind, self.lexeme.clone(), start_line, start_col))
         } else {
             self.finished = true;
             Ok(Token::new(
                 TokenType::EOF,
                 String::new(),
                 self.line,
-                self.column,
+                self.column + 1,
             ))
         };
 
         Some(token)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn test_lexer(input: &str) -> Vec<Result<Token, TokenError>> {
+        Lexer::new(input).iter().collect()
+    }
+
+    fn test_lexer_no_errors(input: &str) -> Vec<Token> {
+        Lexer::new(input)
+            .iter()
+            .map(|res| match res {
+                Ok(tok) => tok,
+                Err(e) => panic!("Parsing error: {}", e),
+            })
+            .collect()
+    }
+
+    #[test]
+    fn test_single_character_tokens() {
+        let source = "(){},.-+*;";
+        let tokens = test_lexer_no_errors(source);
+
+        assert_eq!(tokens.len(), 11);
+        assert_eq!(
+            tokens[0],
+            Token::new(TokenType::LeftParen, "(".to_string(), 1, 1)
+        );
+        assert_eq!(
+            tokens[1],
+            Token::new(TokenType::RightParen, ")".to_string(), 1, 2)
+        );
+        assert_eq!(
+            tokens[2],
+            Token::new(TokenType::LeftBrace, "{".to_string(), 1, 3)
+        );
+        assert_eq!(
+            tokens[3],
+            Token::new(TokenType::RightBrace, "}".to_string(), 1, 4)
+        );
+        assert_eq!(
+            tokens[4],
+            Token::new(TokenType::Comma, ",".to_string(), 1, 5)
+        );
+        assert_eq!(tokens[5], Token::new(TokenType::Dot, ".".to_string(), 1, 6));
+        assert_eq!(
+            tokens[6],
+            Token::new(TokenType::Minus, "-".to_string(), 1, 7)
+        );
+        assert_eq!(
+            tokens[7],
+            Token::new(TokenType::Plus, "+".to_string(), 1, 8)
+        );
+        assert_eq!(
+            tokens[8],
+            Token::new(TokenType::Star, "*".to_string(), 1, 9)
+        );
+        assert_eq!(
+            tokens[9],
+            Token::new(TokenType::Semicolon, ";".to_string(), 1, 10)
+        );
+        assert_eq!(
+            tokens[10],
+            Token::new(TokenType::EOF, "".to_string(), 1, 11)
+        );
+    }
+
+    #[test]
+    fn test_two_character_tokens() {
+        let source = "=== !=\n<= >=\n";
+        let tokens = test_lexer_no_errors(source);
+
+        assert_eq!(tokens.len(), 6);
+        assert_eq!(
+            tokens[0],
+            Token::new(TokenType::EqualEqual, "==".to_string(), 1, 1)
+        );
+        assert_eq!(
+            tokens[1],
+            Token::new(TokenType::Equal, "=".to_string(), 1, 3)
+        );
+        assert_eq!(
+            tokens[2],
+            Token::new(TokenType::BangEqual, "!=".to_string(), 1, 5)
+        );
+        assert_eq!(
+            tokens[3],
+            Token::new(TokenType::LessEqual, "<=".to_string(), 2, 1)
+        );
+        assert_eq!(
+            tokens[4],
+            Token::new(TokenType::GreaterEqual, ">=".to_string(), 2, 4)
+        );
+        assert_eq!(tokens[5], Token::new(TokenType::EOF, "".to_string(), 3, 1));
+    }
+
+    #[test]
+    fn test_strings() {
+        let source = "\"hello\"name=\"world\"";
+        let tokens = test_lexer_no_errors(source);
+
+        assert_eq!(tokens.len(), 5);
+        assert_eq!(
+            tokens[0],
+            Token::new(
+                TokenType::String("hello".to_string()),
+                "\"hello\"".to_string(),
+                1,
+                1
+            )
+        );
+        assert_eq!(
+            tokens[1],
+            Token::new(TokenType::Identifier, "name".to_string(), 1, 8)
+        );
+        assert_eq!(
+            tokens[2],
+            Token::new(TokenType::Equal, "=".to_string(), 1, 12)
+        );
+        assert_eq!(
+            tokens[3],
+            Token::new(
+                TokenType::String("world".to_string()),
+                "\"world\"".to_string(),
+                1,
+                13
+            )
+        );
+        assert_eq!(tokens[4], Token::new(TokenType::EOF, "".to_string(), 1, 20));
+    }
+
+    #[test]
+    fn test_numbers() {
+        let source = "123 456.789 12.34.56";
+        let tokens = test_lexer_no_errors(source);
+
+        assert_eq!(tokens.len(), 6);
+        assert_eq!(
+            tokens[0],
+            Token::new(TokenType::Number(123.0), "123".to_string(), 1, 1)
+        );
+        assert_eq!(
+            tokens[1],
+            Token::new(TokenType::Number(456.789), "456.789".to_string(), 1, 5)
+        );
+        assert_eq!(
+            tokens[2],
+            Token::new(TokenType::Number(12.34), "12.34".to_string(), 1, 13)
+        );
+        assert_eq!(
+            tokens[3],
+            Token::new(TokenType::Dot, ".".to_string(), 1, 18)
+        );
+        assert_eq!(
+            tokens[4],
+            Token::new(TokenType::Number(56.0), "56".to_string(), 1, 19)
+        );
+        assert_eq!(tokens[5], Token::new(TokenType::EOF, "".to_string(), 1, 21));
+    }
+
+    #[test]
+    fn test_comments() {
+        let source = "// This is a comment\n123";
+        let tokens = test_lexer_no_errors(source);
+
+        assert_eq!(tokens.len(), 2);
+        assert_eq!(
+            tokens[0],
+            Token::new(TokenType::Number(123.0), "123".to_string(), 2, 1)
+        );
+        assert_eq!(tokens[1], Token::new(TokenType::EOF, "".to_string(), 2, 4));
+    }
+
+    #[test]
+    fn test_unterminated_string() {
+        let source = "\"This is an unterminated string";
+        let tokens = test_lexer(source);
+
+        assert_eq!(tokens.len(), 2);
+        assert_eq!(
+            tokens[0],
+            Err(TokenError::new(TokenErrorType::UnterminatedString, 1, 1))
+        );
+        assert_eq!(
+            tokens[1],
+            Ok(Token::new(TokenType::EOF, "".to_string(), 1, 32))
+        );
+    }
+
+    #[test]
+    fn test_unexpected_character() {
+        let source = "§+orchid";
+        let tokens = test_lexer(source);
+
+        assert_eq!(tokens.len(), 4);
+        assert_eq!(
+            tokens[0],
+            Err(TokenError::new(
+                TokenErrorType::UnexpectedToken("§".to_string()),
+                1,
+                1
+            ))
+        );
+        assert_eq!(
+            tokens[1],
+            Ok(Token::new(TokenType::Plus, "+".to_string(), 1, 2))
+        );
+        assert_eq!(
+            tokens[2],
+            Ok(Token::new(
+                TokenType::Identifier,
+                "orchid".to_string(),
+                1,
+                3
+            ))
+        );
+        assert_eq!(
+            tokens[3],
+            Ok(Token::new(TokenType::EOF, "".to_string(), 1, 9))
+        );
+    }
+
+    #[test]
+    fn test_reserved_words() {
+        let source = "class var if else";
+        let tokens = test_lexer_no_errors(source);
+
+        assert_eq!(tokens.len(), 5);
+        assert_eq!(
+            tokens[0],
+            Token::new(TokenType::Class, "class".to_string(), 1, 1)
+        );
+        assert_eq!(
+            tokens[1],
+            Token::new(TokenType::Var, "var".to_string(), 1, 7)
+        );
+        assert_eq!(
+            tokens[2],
+            Token::new(TokenType::If, "if".to_string(), 1, 11)
+        );
+        assert_eq!(
+            tokens[3],
+            Token::new(TokenType::Else, "else".to_string(), 1, 14)
+        );
+        assert_eq!(tokens[4], Token::new(TokenType::EOF, "".to_string(), 1, 18));
+    }
+
+    #[test]
+    fn edge_cases() {
+        let source = "andor 3.\nprint -n.abs();\n";
+        let tokens = test_lexer_no_errors(source);
+
+        assert_eq!(tokens.len(), 12);
+        assert_eq!(
+            tokens[0],
+            Token::new(TokenType::Identifier, "andor".to_string(), 1, 1)
+        );
+        assert_eq!(
+            tokens[1],
+            Token::new(TokenType::Number(3.0), "3".to_string(), 1, 7)
+        );
+        assert_eq!(
+            tokens[2],
+            Token::new(TokenType::Dot, ".".to_string(), 1, 8)
+        );
+        assert_eq!(
+            tokens[3],
+            Token::new(TokenType::Print, "print".to_string(), 2, 1)
+        );
+        assert_eq!(
+            tokens[4],
+            Token::new(TokenType::Minus, "-".to_string(), 2, 7)
+        );
+        assert_eq!(
+            tokens[5],
+            Token::new(TokenType::Identifier, "n".to_string(), 2, 8)
+        );
+        assert_eq!(tokens[6], Token::new(TokenType::Dot, ".".to_string(), 2, 9));
+        assert_eq!(
+            tokens[7],
+            Token::new(TokenType::Identifier, "abs".to_string(), 2, 10)
+        );
+        assert_eq!(
+            tokens[8],
+            Token::new(TokenType::LeftParen, "(".to_string(), 2, 13)
+        );
+        assert_eq!(
+            tokens[9],
+            Token::new(TokenType::RightParen, ")".to_string(), 2, 14)
+        );
+        assert_eq!(
+            tokens[10],
+            Token::new(TokenType::Semicolon, ";".to_string(), 2, 15)
+        );
+        assert_eq!(tokens[11], Token::new(TokenType::EOF, "".to_string(), 3, 1));
     }
 }

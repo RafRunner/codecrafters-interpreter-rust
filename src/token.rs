@@ -31,7 +31,7 @@ pub enum TokenType {
     // Literals.
     String(String),
     Number(f64),
-    
+
     Identifier,
 
     // Reserved words
@@ -99,6 +99,28 @@ impl TokenType {
             TokenType::EOF => "EOF",
         }
     }
+
+    pub fn check_reserved_word(lexeme: &str) -> Option<Self> {
+        match lexeme {
+            "and" => Some(TokenType::And),
+            "class" => Some(TokenType::Class),
+            "else" => Some(TokenType::Else),
+            "false" => Some(TokenType::False),
+            "for" => Some(TokenType::For),
+            "fun" => Some(TokenType::Fun),
+            "if" => Some(TokenType::If),
+            "nil" => Some(TokenType::Nil),
+            "or" => Some(TokenType::Or),
+            "print" => Some(TokenType::Print),
+            "return" => Some(TokenType::Return),
+            "super" => Some(TokenType::Super),
+            "this" => Some(TokenType::This),
+            "true" => Some(TokenType::True),
+            "var" => Some(TokenType::Var),
+            "while" => Some(TokenType::While),
+            _ => None,
+        }
+    }
 }
 
 impl Display for TokenType {
@@ -107,7 +129,7 @@ impl Display for TokenType {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct Token {
     pub kind: TokenType,
     pub lexeme: String,
@@ -144,7 +166,7 @@ impl Display for Token {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct TokenError {
     pub error: TokenErrorType,
     pub line: usize,
@@ -173,7 +195,7 @@ impl Error for TokenError {
     }
 }
 
-#[derive(thiserror::Error, Debug)]
+#[derive(thiserror::Error, Debug, PartialEq)]
 pub enum TokenErrorType {
     #[error("Unexpected character: {0}")]
     UnexpectedToken(String),
