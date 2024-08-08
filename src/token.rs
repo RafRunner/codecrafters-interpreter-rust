@@ -93,7 +93,7 @@ impl Display for Token {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let literal = match &self.kind {
             TokenType::String(s) => s.clone(),
-            TokenType::Number(n) => n.to_string(),
+            TokenType::Number(n) => format!("{:?}", n),
             _ => String::from("null"),
         };
 
