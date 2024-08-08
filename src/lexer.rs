@@ -125,7 +125,7 @@ impl<'a> Iterator for LexerIterator<'a> {
                         }
                     }
 
-                    if !lexeme.ends_with('"') {
+                    if !lexeme.ends_with('"') || lexeme.len() < 2 {
                         return Some(Err(TokenError::new(
                             TokenErrorType::UnterminatedString,
                             start_line,
@@ -134,6 +134,38 @@ impl<'a> Iterator for LexerIterator<'a> {
                     } else {
                         TokenType::String(lexeme[1..lexeme.len() - 1].to_string())
                     }
+                }
+                c if c.is_ascii_digit() => {
+                    while let Some(c) = self.chars.peek() {
+                        if c.is_ascii_digit() {
+                            lexeme.extend(self.next_char());
+                        } else if *c == '.' {
+                            if self
+                                .chars
+                                .clone()
+                                .nth(2)
+                                .map(|c| c.is_ascii_digit())
+                                .unwrap_or(false)
+                            {
+                                // Consume the "."
+                                lexeme.extend(self.next_char());
+
+                                while let Some(c) = self.chars.peek() {
+                                    if c.is_ascii_digit() {
+                                        lexeme.extend(self.next_char())
+                                    } else {
+                                        break;
+                                    }
+                                }
+                            }
+
+                            break;
+                        } else {
+                            break;
+                        }
+                    }
+
+                    TokenType::Number(lexeme.parse().expect("lexeme should be a valid number"))
                 }
 
                 _ => {

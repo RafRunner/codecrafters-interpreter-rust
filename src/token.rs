@@ -3,7 +3,7 @@ use std::{
     fmt::{Display, Formatter},
 };
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq)]
 pub enum TokenType {
     // Single-character tokens.
     LeftParen,
@@ -30,6 +30,7 @@ pub enum TokenType {
 
     // Literals.
     String(String),
+    Number(f64),
 
     EOF,
 }
@@ -57,6 +58,7 @@ impl TokenType {
             TokenType::Greater => "GREATER",
             TokenType::GreaterEqual => "GREATER_EQUAL",
             TokenType::String(..) => "STRING",
+            TokenType::Number(..) => "NUMBER",
             TokenType::EOF => "EOF",
         }
     }
@@ -90,7 +92,8 @@ impl Token {
 impl Display for Token {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let literal = match &self.kind {
-            TokenType::String(literal) => literal,
+            TokenType::String(s) => s,
+            TokenType::Number(n) => &n.to_string(),
             _ => "null",
         };
 
