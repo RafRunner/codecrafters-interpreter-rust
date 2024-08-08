@@ -167,6 +167,17 @@ impl<'a> Iterator for LexerIterator<'a> {
 
                     TokenType::Number(lexeme.parse().expect("lexeme should be a valid number"))
                 }
+                c if c.is_ascii_alphabetic() || c == '_' => {
+                    while let Some(c) = self.chars.peek() {
+                        if c.is_ascii_alphanumeric() || *c == '_' {
+                            lexeme.extend(self.next_char())
+                        } else {
+                            break;
+                        }
+                    }
+                    
+                    TokenType::Identifier
+                }
 
                 _ => {
                     return Some(Err(TokenError::new(

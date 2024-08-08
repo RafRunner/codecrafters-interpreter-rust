@@ -31,6 +31,8 @@ pub enum TokenType {
     // Literals.
     String(String),
     Number(f64),
+    
+    Identifier,
 
     EOF,
 }
@@ -59,6 +61,7 @@ impl TokenType {
             TokenType::GreaterEqual => "GREATER_EQUAL",
             TokenType::String(..) => "STRING",
             TokenType::Number(..) => "NUMBER",
+            TokenType::Identifier => "IDENTIFIER",
             TokenType::EOF => "EOF",
         }
     }
