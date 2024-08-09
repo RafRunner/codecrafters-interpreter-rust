@@ -216,6 +216,13 @@ mod tests {
             .collect()
     }
 
+    fn assert_single_token(input: &str, expected: TokenType) {
+        let tokens = test_lexer_no_errors(input);
+
+        assert_eq!(tokens.len(), 2);
+        assert_eq!(tokens[0].kind, expected);
+    }
+
     #[test]
     fn test_single_character_tokens() {
         let source = "(){},.-+*;";
@@ -291,12 +298,16 @@ mod tests {
 
     #[test]
     fn test_comments() {
-        let source = "// This is a comment\n123";
+        let source = "\"Olá\" // This is a comment\n123";
         let tokens = test_lexer_no_errors(source);
 
-        assert_eq!(tokens.len(), 2);
-        assert_eq!(tokens[0], Token::new(TokenType::Number(123.0), "123", 2, 1));
-        assert_eq!(tokens[1], Token::new(TokenType::EOF, "", 2, 4));
+        assert_eq!(tokens.len(), 3);
+        assert_eq!(
+            tokens[0],
+            Token::new(TokenType::String("Olá".to_string()), "\"Olá\"", 1, 1)
+        );
+        assert_eq!(tokens[1], Token::new(TokenType::Number(123.0), "123", 2, 1));
+        assert_eq!(tokens[2], Token::new(TokenType::EOF, "", 2, 4));
     }
 
     #[test]
@@ -336,20 +347,27 @@ mod tests {
 
     #[test]
     fn test_reserved_words() {
-        let source = "class var if else";
-        let tokens = test_lexer_no_errors(source);
-
-        assert_eq!(tokens.len(), 5);
-        assert_eq!(tokens[0], Token::new(TokenType::Class, "class", 1, 1));
-        assert_eq!(tokens[1], Token::new(TokenType::Var, "var", 1, 7));
-        assert_eq!(tokens[2], Token::new(TokenType::If, "if", 1, 11));
-        assert_eq!(tokens[3], Token::new(TokenType::Else, "else", 1, 14));
-        assert_eq!(tokens[4], Token::new(TokenType::EOF, "", 1, 18));
+        assert_single_token("\tand", TokenType::And);
+        assert_single_token("class", TokenType::Class);
+        assert_single_token("\nelse", TokenType::Else);
+        assert_single_token("false", TokenType::False);
+        assert_single_token("for\n", TokenType::For);
+        assert_single_token("fun\t", TokenType::Fun);
+        assert_single_token("if", TokenType::If);
+        assert_single_token("nil", TokenType::Nil);
+        assert_single_token("or", TokenType::Or);
+        assert_single_token("print ", TokenType::Print);
+        assert_single_token("  return", TokenType::Return);
+        assert_single_token("super", TokenType::Super);
+        assert_single_token("this", TokenType::This);
+        assert_single_token("true  ", TokenType::True);
+        assert_single_token("var", TokenType::Var);
+        assert_single_token(" while", TokenType::While);
     }
 
     #[test]
     fn edge_cases() {
-        let source = "andor 3.\nprint -n.abs();\n";
+        let source = "andor 3.\nprint -2.abs();\n";
         let tokens = test_lexer_no_errors(source);
 
         assert_eq!(tokens.len(), 12);
@@ -358,7 +376,7 @@ mod tests {
         assert_eq!(tokens[2], Token::new(TokenType::Dot, ".", 1, 8));
         assert_eq!(tokens[3], Token::new(TokenType::Print, "print", 2, 1));
         assert_eq!(tokens[4], Token::new(TokenType::Minus, "-", 2, 7));
-        assert_eq!(tokens[5], Token::new(TokenType::Identifier, "n", 2, 8));
+        assert_eq!(tokens[5], Token::new(TokenType::Number(2.0), "2", 2, 8));
         assert_eq!(tokens[6], Token::new(TokenType::Dot, ".", 2, 9));
         assert_eq!(tokens[7], Token::new(TokenType::Identifier, "abs", 2, 10));
         assert_eq!(tokens[8], Token::new(TokenType::LeftParen, "(", 2, 13));
