@@ -140,7 +140,7 @@ impl<'a> Iterator for LexerIterator<'a> {
                             if self
                                 .chars
                                 .clone()
-                                .nth(2)
+                                .nth(1)
                                 .map_or(false, |c| c.is_ascii_digit())
                             {
                                 // Consume the "."
@@ -277,23 +277,24 @@ mod tests {
 
     #[test]
     fn test_numbers() {
-        let source = "123 456.789+12.34.56";
+        let source = "123 2.0 456.789+12.34.56";
         let tokens = test_lexer_no_errors(source);
 
-        assert_eq!(tokens.len(), 7);
+        assert_eq!(tokens.len(), 8);
         assert_eq!(tokens[0], Token::new(TokenType::Number(123.0), "123", 1, 1));
+        assert_eq!(tokens[1], Token::new(TokenType::Number(2.0), "2.0", 1, 5));
         assert_eq!(
-            tokens[1],
-            Token::new(TokenType::Number(456.789), "456.789", 1, 5)
+            tokens[2],
+            Token::new(TokenType::Number(456.789), "456.789", 1, 9)
         );
-        assert_eq!(tokens[2], Token::new(TokenType::Plus, "+", 1, 12));
+        assert_eq!(tokens[3], Token::new(TokenType::Plus, "+", 1, 16));
         assert_eq!(
-            tokens[3],
-            Token::new(TokenType::Number(12.34), "12.34", 1, 13)
+            tokens[4],
+            Token::new(TokenType::Number(12.34), "12.34", 1, 17)
         );
-        assert_eq!(tokens[4], Token::new(TokenType::Dot, ".", 1, 18));
-        assert_eq!(tokens[5], Token::new(TokenType::Number(56.0), "56", 1, 19));
-        assert_eq!(tokens[6], Token::new(TokenType::EOF, "", 1, 21));
+        assert_eq!(tokens[5], Token::new(TokenType::Dot, ".", 1, 22));
+        assert_eq!(tokens[6], Token::new(TokenType::Number(56.0), "56", 1, 23));
+        assert_eq!(tokens[7], Token::new(TokenType::EOF, "", 1, 25));
     }
 
     #[test]
