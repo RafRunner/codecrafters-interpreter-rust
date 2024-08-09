@@ -26,7 +26,7 @@ fn main() {
 
             for token in tokens {
                 match token {
-                    Ok(token) => println!("{:?}", token),
+                    Ok(token) => println!("{}", token),
                     Err(e) => {
                         had_lexical_error = true;
                         eprintln!("{}", e);
