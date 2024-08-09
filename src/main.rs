@@ -34,6 +34,8 @@ fn main() {
                 }
             }
 
+            println!("EOF  null");
+
             if had_lexical_error {
                 std::process::exit(65);
             }
@@ -42,7 +44,7 @@ fn main() {
             let lexer = Lexer::new(&file_contents);
             let mut parser = Parser::new(lexer);
 
-            match parser.parse() {
+            match parser.parse_program() {
                 Ok(program) => {
                     for stmt in program.statements {
                         println!("{}", stmt);

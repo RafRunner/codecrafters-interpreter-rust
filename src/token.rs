@@ -51,8 +51,6 @@ pub enum TokenType {
     True,
     Var,
     While,
-
-    EOF,
 }
 
 impl TokenType {
@@ -96,7 +94,6 @@ impl TokenType {
             Self::True => "TRUE",
             Self::Var => "VAR",
             Self::While => "WHILE",
-            Self::EOF => "EOF",
         }
     }
 

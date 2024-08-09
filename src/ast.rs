@@ -15,10 +15,22 @@ impl Program {
     }
 }
 
+impl Default for Program {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[derive(Debug)]
 pub struct Statement {
     pub token: Token,
     pub kind: StatementType,
+}
+
+impl Statement {
+    pub fn new(token: Token, kind: StatementType) -> Self {
+        Self { token, kind }
+    }
 }
 
 impl Display for Statement {
@@ -38,6 +50,12 @@ pub enum StatementType {
 pub struct Expression {
     pub token: Token,
     pub kind: ExpressionType,
+}
+
+impl Expression {
+    pub fn new(token: Token, kind: ExpressionType) -> Self {
+        Self { token, kind }
+    }
 }
 
 impl Display for Expression {
@@ -87,7 +105,7 @@ impl Display for LiteralExpression {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             LiteralExpression::Number { literal } => write!(f, "{:?}", literal),
-            LiteralExpression::String { literal } => write!(f, "\"{}\"", literal),
+            LiteralExpression::String { literal } => write!(f, "{}", literal),
             LiteralExpression::True => write!(f, "true"),
             LiteralExpression::False => write!(f, "false"),
             LiteralExpression::Nil => write!(f, "nil"),
@@ -146,14 +164,11 @@ mod tests {
     use crate::token::TokenType;
 
     fn fake_token() -> Token {
-        Token::new(TokenType::EOF, "", 0, 0)
+        Token::new(TokenType::Semicolon, "", 0, 0)
     }
 
     fn fake_expression(kind: ExpressionType) -> Expression {
-        Expression {
-            token: fake_token(),
-            kind,
-        }
+        Expression::new(fake_token(), kind)
     }
 
     #[test]
@@ -171,7 +186,7 @@ mod tests {
                 literal: "hello".to_string(),
             },
         });
-        assert_eq!(expr.to_string(), "\"hello\"");
+        assert_eq!(expr.to_string(), "hello");
     }
 
     #[test]
@@ -216,14 +231,14 @@ mod tests {
 
     #[test]
     fn test_statement_expression() {
-        let stmt = Statement {
-            token: fake_token(),
-            kind: StatementType::Expression {
+        let stmt = Statement::new(
+            fake_token(),
+            StatementType::Expression {
                 expr: fake_expression(ExpressionType::Literal {
                     literal: LiteralExpression::True,
                 }),
             },
-        };
+        );
         assert_eq!(stmt.to_string(), "true");
     }
 }

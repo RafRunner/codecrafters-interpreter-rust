@@ -15,7 +15,6 @@ impl<'a> Lexer<'a> {
         LexerIterator {
             chars: self.source_code.chars().peekable(),
             lexeme: String::new(),
-            finished: false,
             line: 1,
             column: 0,
         }
@@ -25,7 +24,6 @@ impl<'a> Lexer<'a> {
 pub struct LexerIterator<'a> {
     chars: Peekable<Chars<'a>>,
     lexeme: String,
-    finished: bool,
     line: usize,
     column: usize,
 }
@@ -66,10 +64,6 @@ impl<'a> Iterator for LexerIterator<'a> {
     type Item = Result<Token, TokenError>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.finished {
-            return None;
-        }
-
         // Ignoring whitespace
         while let Some(peek) = self.chars.peek() {
             if peek.is_whitespace() {
@@ -79,7 +73,7 @@ impl<'a> Iterator for LexerIterator<'a> {
             }
         }
 
-        let token = if let Some(first) = self.next_char() {
+        if let Some(first) = self.next_char() {
             let (start_line, start_col) = (self.line, self.column);
             self.lexeme = first.to_string();
 
@@ -188,13 +182,10 @@ impl<'a> Iterator for LexerIterator<'a> {
                 }
             };
 
-            Ok(Token::new(kind, &self.lexeme, start_line, start_col))
+            Some(Ok(Token::new(kind, &self.lexeme, start_line, start_col)))
         } else {
-            self.finished = true;
-            Ok(Token::new(TokenType::EOF, "", self.line, self.column + 1))
-        };
-
-        Some(token)
+            None
+        }
     }
 }
 
@@ -202,148 +193,204 @@ impl<'a> Iterator for LexerIterator<'a> {
 mod tests {
     use super::*;
 
-    fn test_lexer(input: &str) -> Vec<Result<Token, TokenError>> {
-        Lexer::new(input).iter().collect()
-    }
-
-    fn test_lexer_no_errors(input: &str) -> Vec<Token> {
+    fn tokens_no_erros(input: &str) -> Vec<Token> {
         Lexer::new(input)
             .iter()
             .map(|res| match res {
                 Ok(tok) => tok,
-                Err(e) => panic!("Parsing error: {}", e),
+                Err(e) => panic!("Lexer error: {}", e),
             })
             .collect()
     }
 
     fn assert_single_token(input: &str, expected: TokenType) {
-        let tokens = test_lexer_no_errors(input);
+        let tokens = tokens_no_erros(input);
 
-        assert_eq!(tokens.len(), 2);
+        assert_eq!(tokens.len(), 1);
         assert_eq!(tokens[0].kind, expected);
     }
 
     #[test]
     fn test_single_character_tokens() {
         let source = "(){},.-+*;";
-        let tokens = test_lexer_no_errors(source);
+        let mut tokens = tokens_no_erros(source).into_iter();
 
-        assert_eq!(tokens.len(), 11);
-        assert_eq!(tokens[0], Token::new(TokenType::LeftParen, "(", 1, 1));
-        assert_eq!(tokens[1], Token::new(TokenType::RightParen, ")", 1, 2));
-        assert_eq!(tokens[2], Token::new(TokenType::LeftBrace, "{", 1, 3));
-        assert_eq!(tokens[3], Token::new(TokenType::RightBrace, "}", 1, 4));
-        assert_eq!(tokens[4], Token::new(TokenType::Comma, ",", 1, 5));
-        assert_eq!(tokens[5], Token::new(TokenType::Dot, ".", 1, 6));
-        assert_eq!(tokens[6], Token::new(TokenType::Minus, "-", 1, 7));
-        assert_eq!(tokens[7], Token::new(TokenType::Plus, "+", 1, 8));
-        assert_eq!(tokens[8], Token::new(TokenType::Star, "*", 1, 9));
-        assert_eq!(tokens[9], Token::new(TokenType::Semicolon, ";", 1, 10));
-        assert_eq!(tokens[10], Token::new(TokenType::EOF, "", 1, 11));
+        assert_eq!(
+            tokens.next(),
+            Some(Token::new(TokenType::LeftParen, "(", 1, 1))
+        );
+        assert_eq!(
+            tokens.next(),
+            Some(Token::new(TokenType::RightParen, ")", 1, 2))
+        );
+        assert_eq!(
+            tokens.next(),
+            Some(Token::new(TokenType::LeftBrace, "{", 1, 3))
+        );
+        assert_eq!(
+            tokens.next(),
+            Some(Token::new(TokenType::RightBrace, "}", 1, 4))
+        );
+        assert_eq!(tokens.next(), Some(Token::new(TokenType::Comma, ",", 1, 5)));
+        assert_eq!(tokens.next(), Some(Token::new(TokenType::Dot, ".", 1, 6)));
+        assert_eq!(tokens.next(), Some(Token::new(TokenType::Minus, "-", 1, 7)));
+        assert_eq!(tokens.next(), Some(Token::new(TokenType::Plus, "+", 1, 8)));
+        assert_eq!(tokens.next(), Some(Token::new(TokenType::Star, "*", 1, 9)));
+        assert_eq!(
+            tokens.next(),
+            Some(Token::new(TokenType::Semicolon, ";", 1, 10))
+        );
+        assert_eq!(tokens.next(), None);
     }
 
     #[test]
     fn test_two_character_tokens() {
         let source = "=== !=\n<= >=\n";
-        let tokens = test_lexer_no_errors(source);
+        let mut tokens = tokens_no_erros(source).into_iter();
 
-        assert_eq!(tokens.len(), 6);
-        assert_eq!(tokens[0], Token::new(TokenType::EqualEqual, "==", 1, 1));
-        assert_eq!(tokens[1], Token::new(TokenType::Equal, "=", 1, 3));
-        assert_eq!(tokens[2], Token::new(TokenType::BangEqual, "!=", 1, 5));
-        assert_eq!(tokens[3], Token::new(TokenType::LessEqual, "<=", 2, 1));
-        assert_eq!(tokens[4], Token::new(TokenType::GreaterEqual, ">=", 2, 4));
-        assert_eq!(tokens[5], Token::new(TokenType::EOF, "", 3, 1));
+        assert_eq!(
+            tokens.next(),
+            Some(Token::new(TokenType::EqualEqual, "==", 1, 1))
+        );
+        assert_eq!(tokens.next(), Some(Token::new(TokenType::Equal, "=", 1, 3)));
+        assert_eq!(
+            tokens.next(),
+            Some(Token::new(TokenType::BangEqual, "!=", 1, 5))
+        );
+        assert_eq!(
+            tokens.next(),
+            Some(Token::new(TokenType::LessEqual, "<=", 2, 1))
+        );
+        assert_eq!(
+            tokens.next(),
+            Some(Token::new(TokenType::GreaterEqual, ">=", 2, 4))
+        );
+        assert_eq!(tokens.next(), None);
     }
 
     #[test]
     fn test_strings() {
         let source = "\"hello\"name=\"world\"";
-        let tokens = test_lexer_no_errors(source);
+        let mut tokens = tokens_no_erros(source).into_iter();
 
-        assert_eq!(tokens.len(), 5);
         assert_eq!(
-            tokens[0],
-            Token::new(TokenType::String("hello".to_string()), "\"hello\"", 1, 1)
+            tokens.next(),
+            Some(Token::new(
+                TokenType::String("hello".to_string()),
+                "\"hello\"",
+                1,
+                1
+            ))
         );
-        assert_eq!(tokens[1], Token::new(TokenType::Identifier, "name", 1, 8));
-        assert_eq!(tokens[2], Token::new(TokenType::Equal, "=", 1, 12));
         assert_eq!(
-            tokens[3],
-            Token::new(TokenType::String("world".to_string()), "\"world\"", 1, 13)
+            tokens.next(),
+            Some(Token::new(TokenType::Identifier, "name", 1, 8))
         );
-        assert_eq!(tokens[4], Token::new(TokenType::EOF, "", 1, 20));
+        assert_eq!(
+            tokens.next(),
+            Some(Token::new(TokenType::Equal, "=", 1, 12))
+        );
+        assert_eq!(
+            tokens.next(),
+            Some(Token::new(
+                TokenType::String("world".to_string()),
+                "\"world\"",
+                1,
+                13
+            ))
+        );
+        assert_eq!(tokens.next(), None);
     }
 
     #[test]
     fn test_numbers() {
         let source = "123 2.0 456.789+12.34.56";
-        let tokens = test_lexer_no_errors(source);
+        let mut tokens = tokens_no_erros(source).into_iter();
 
-        assert_eq!(tokens.len(), 8);
-        assert_eq!(tokens[0], Token::new(TokenType::Number(123.0), "123", 1, 1));
-        assert_eq!(tokens[1], Token::new(TokenType::Number(2.0), "2.0", 1, 5));
         assert_eq!(
-            tokens[2],
-            Token::new(TokenType::Number(456.789), "456.789", 1, 9)
+            tokens.next(),
+            Some(Token::new(TokenType::Number(123.0), "123", 1, 1))
         );
-        assert_eq!(tokens[3], Token::new(TokenType::Plus, "+", 1, 16));
         assert_eq!(
-            tokens[4],
-            Token::new(TokenType::Number(12.34), "12.34", 1, 17)
+            tokens.next(),
+            Some(Token::new(TokenType::Number(2.0), "2.0", 1, 5))
         );
-        assert_eq!(tokens[5], Token::new(TokenType::Dot, ".", 1, 22));
-        assert_eq!(tokens[6], Token::new(TokenType::Number(56.0), "56", 1, 23));
-        assert_eq!(tokens[7], Token::new(TokenType::EOF, "", 1, 25));
+        assert_eq!(
+            tokens.next(),
+            Some(Token::new(TokenType::Number(456.789), "456.789", 1, 9))
+        );
+        assert_eq!(tokens.next(), Some(Token::new(TokenType::Plus, "+", 1, 16)));
+        assert_eq!(
+            tokens.next(),
+            Some(Token::new(TokenType::Number(12.34), "12.34", 1, 17))
+        );
+        assert_eq!(tokens.next(), Some(Token::new(TokenType::Dot, ".", 1, 22)));
+        assert_eq!(
+            tokens.next(),
+            Some(Token::new(TokenType::Number(56.0), "56", 1, 23))
+        );
+        assert_eq!(tokens.next(), None);
     }
 
     #[test]
     fn test_comments() {
         let source = "\"Olá\" // This is a comment\n123";
-        let tokens = test_lexer_no_errors(source);
+        let mut tokens = tokens_no_erros(source).into_iter();
 
-        assert_eq!(tokens.len(), 3);
         assert_eq!(
-            tokens[0],
-            Token::new(TokenType::String("Olá".to_string()), "\"Olá\"", 1, 1)
+            tokens.next(),
+            Some(Token::new(
+                TokenType::String("Olá".to_string()),
+                "\"Olá\"",
+                1,
+                1
+            ))
         );
-        assert_eq!(tokens[1], Token::new(TokenType::Number(123.0), "123", 2, 1));
-        assert_eq!(tokens[2], Token::new(TokenType::EOF, "", 2, 4));
+        assert_eq!(
+            tokens.next(),
+            Some(Token::new(TokenType::Number(123.0), "123", 2, 1))
+        );
+        assert_eq!(tokens.next(), None);
     }
 
     #[test]
     fn test_unterminated_string() {
         let source = "\"This is an unterminated string";
-        let tokens = test_lexer(source);
+        let mut tokens = Lexer::new(source).iter();
 
-        assert_eq!(tokens.len(), 2);
         assert_eq!(
-            tokens[0],
-            Err(TokenError::new(TokenErrorType::UnterminatedString, 1, 1))
+            tokens.next(),
+            Some(Err(TokenError::new(
+                TokenErrorType::UnterminatedString,
+                1,
+                1
+            )))
         );
-        assert_eq!(tokens[1], Ok(Token::new(TokenType::EOF, "", 1, 32)));
+        assert_eq!(tokens.next(), None);
     }
 
     #[test]
     fn test_unexpected_character() {
         let source = "§+orchid";
-        let tokens = test_lexer(source);
+        let mut tokens = Lexer::new(source).iter();
 
-        assert_eq!(tokens.len(), 4);
         assert_eq!(
-            tokens[0],
-            Err(TokenError::new(
+            tokens.next(),
+            Some(Err(TokenError::new(
                 TokenErrorType::UnexpectedToken("§".to_string()),
                 1,
                 1
-            ))
+            )))
         );
-        assert_eq!(tokens[1], Ok(Token::new(TokenType::Plus, "+", 1, 2)));
         assert_eq!(
-            tokens[2],
-            Ok(Token::new(TokenType::Identifier, "orchid", 1, 3))
+            tokens.next(),
+            Some(Ok(Token::new(TokenType::Plus, "+", 1, 2)))
         );
-        assert_eq!(tokens[3], Ok(Token::new(TokenType::EOF, "", 1, 9)));
+        assert_eq!(
+            tokens.next(),
+            Some(Ok(Token::new(TokenType::Identifier, "orchid", 1, 3)))
+        );
+        assert_eq!(tokens.next(), None);
     }
 
     #[test]
@@ -369,20 +416,43 @@ mod tests {
     #[test]
     fn edge_cases() {
         let source = "andor 3.\nprint -2.abs();\n";
-        let tokens = test_lexer_no_errors(source);
+        let mut tokens = tokens_no_erros(source).into_iter();
 
-        assert_eq!(tokens.len(), 12);
-        assert_eq!(tokens[0], Token::new(TokenType::Identifier, "andor", 1, 1));
-        assert_eq!(tokens[1], Token::new(TokenType::Number(3.0), "3", 1, 7));
-        assert_eq!(tokens[2], Token::new(TokenType::Dot, ".", 1, 8));
-        assert_eq!(tokens[3], Token::new(TokenType::Print, "print", 2, 1));
-        assert_eq!(tokens[4], Token::new(TokenType::Minus, "-", 2, 7));
-        assert_eq!(tokens[5], Token::new(TokenType::Number(2.0), "2", 2, 8));
-        assert_eq!(tokens[6], Token::new(TokenType::Dot, ".", 2, 9));
-        assert_eq!(tokens[7], Token::new(TokenType::Identifier, "abs", 2, 10));
-        assert_eq!(tokens[8], Token::new(TokenType::LeftParen, "(", 2, 13));
-        assert_eq!(tokens[9], Token::new(TokenType::RightParen, ")", 2, 14));
-        assert_eq!(tokens[10], Token::new(TokenType::Semicolon, ";", 2, 15));
-        assert_eq!(tokens[11], Token::new(TokenType::EOF, "", 3, 1));
+        assert_eq!(
+            tokens.next(),
+            Some(Token::new(TokenType::Identifier, "andor", 1, 1))
+        );
+        assert_eq!(
+            tokens.next(),
+            Some(Token::new(TokenType::Number(3.0), "3", 1, 7))
+        );
+        assert_eq!(tokens.next(), Some(Token::new(TokenType::Dot, ".", 1, 8)));
+        assert_eq!(
+            tokens.next(),
+            Some(Token::new(TokenType::Print, "print", 2, 1))
+        );
+        assert_eq!(tokens.next(), Some(Token::new(TokenType::Minus, "-", 2, 7)));
+        assert_eq!(
+            tokens.next(),
+            Some(Token::new(TokenType::Number(2.0), "2", 2, 8))
+        );
+        assert_eq!(tokens.next(), Some(Token::new(TokenType::Dot, ".", 2, 9)));
+        assert_eq!(
+            tokens.next(),
+            Some(Token::new(TokenType::Identifier, "abs", 2, 10))
+        );
+        assert_eq!(
+            tokens.next(),
+            Some(Token::new(TokenType::LeftParen, "(", 2, 13))
+        );
+        assert_eq!(
+            tokens.next(),
+            Some(Token::new(TokenType::RightParen, ")", 2, 14))
+        );
+        assert_eq!(
+            tokens.next(),
+            Some(Token::new(TokenType::Semicolon, ";", 2, 15))
+        );
+        assert_eq!(tokens.next(), None);
     }
 }
