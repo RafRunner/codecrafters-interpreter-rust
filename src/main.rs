@@ -50,7 +50,10 @@ fn main() {
                         println!("{}", stmt);
                     }
                 }
-                Err(e) => panic!("{}", e),
+                Err(e) => {
+                    eprintln!("{}", e);
+                    std::process::exit(65);
+                }
             }
         }
         _ => {

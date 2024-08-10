@@ -148,7 +148,7 @@ impl<'a> Parser<'a> {
             let next_token = self.advance()?;
             let inner = self.parse_expression(next_token)?;
 
-            let closing = self.advance()?;
+            let closing = self.advance_message("Error: Unmatched parentheses.")?;
             if closing.kind == TokenType::RightParen {
                 Ok(Expression::new(
                     token,
@@ -205,9 +205,13 @@ impl<'a> Parser<'a> {
     }
 
     fn advance(&mut self) -> Result<Token, anyhow::Error> {
+        self.advance_message("Unexpected expression end")
+    }
+
+    fn advance_message(&mut self, msg: &str) -> Result<Token, anyhow::Error> {
         match self.lexer.next() {
             Some(result) => result.map_err(|e| e.into()),
-            None => Err(anyhow::anyhow!("Unexpected expression end")),
+            None => Err(anyhow::anyhow!(String::from(msg))),
         }
     }
 }
