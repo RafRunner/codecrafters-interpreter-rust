@@ -69,7 +69,7 @@ impl<'a> Parser<'a> {
                     let operator = operation.kind.props().1.unwrap();
                     let rigth = self
                         .advance()
-                        .and_then(|next_token| self.parse_unary(next_token))?;
+                        .and_then(|next_token| self.parse_comparison(next_token))?;
 
                     left = Expression::new(
                         operation,
@@ -101,7 +101,7 @@ impl<'a> Parser<'a> {
                     let operator = operation.kind.props().1.unwrap();
                     let rigth = self
                         .advance()
-                        .and_then(|next_token| self.parse_unary(next_token))?;
+                        .and_then(|next_token| self.parse_term(next_token))?;
 
                     left = Expression::new(
                         operation,
@@ -130,7 +130,7 @@ impl<'a> Parser<'a> {
                     let operator = operation.kind.props().1.unwrap();
                     let rigth = self
                         .advance()
-                        .and_then(|next_token| self.parse_unary(next_token))?;
+                        .and_then(|next_token| self.parse_factor(next_token))?;
 
                     left = Expression::new(
                         operation,
