@@ -63,7 +63,7 @@ impl<'a> Parser<'a> {
 
         while let Some(Ok(tok)) = self.lexer.peek() {
             match tok.kind {
-                TokenType::Equal | TokenType::BangEqual => {
+                TokenType::EqualEqual | TokenType::BangEqual => {
                     // Checked it existis and is a valid "==" or "!=" token
                     left = self.create_binary_exp(left)?;
                 }

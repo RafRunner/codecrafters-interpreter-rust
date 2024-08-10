@@ -145,7 +145,7 @@ pub enum BinaryOperator {
 impl Display for BinaryOperator {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            BinaryOperator::Equals => write!(f, "="),
+            BinaryOperator::Equals => write!(f, "=="),
             BinaryOperator::NotEquals => write!(f, "!="),
             BinaryOperator::Less => write!(f, "<"),
             BinaryOperator::LessEqual => write!(f, "<="),
