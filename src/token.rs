@@ -3,6 +3,8 @@ use std::{
     fmt::{Display, Formatter},
 };
 
+use crate::ast::{BinaryOperator, UnaryOperator};
+
 #[derive(Debug, PartialEq, Clone)]
 pub enum TokenType {
     // Single-character tokens.
@@ -54,47 +56,55 @@ pub enum TokenType {
 }
 
 impl TokenType {
-    pub fn display_name(&self) -> &str {
+    pub fn props(&self) -> (&str, Option<BinaryOperator>, Option<UnaryOperator>) {
         match self {
-            Self::LeftParen => "LEFT_PAREN",
-            Self::RightParen => "RIGHT_PAREN",
-            Self::LeftBrace => "LEFT_BRACE",
-            Self::RightBrace => "RIGHT_BRACE",
-            Self::Comma => "COMMA",
-            Self::Dot => "DOT",
-            Self::Minus => "MINUS",
-            Self::Plus => "PLUS",
-            Self::Star => "STAR",
-            Self::Semicolon => "SEMICOLON",
-            Self::Slash => "SLASH",
-            Self::Equal => "EQUAL",
-            Self::EqualEqual => "EQUAL_EQUAL",
-            Self::Bang => "BANG",
-            Self::BangEqual => "BANG_EQUAL",
-            Self::Less => "LESS",
-            Self::LessEqual => "LESS_EQUAL",
-            Self::Greater => "GREATER",
-            Self::GreaterEqual => "GREATER_EQUAL",
-            Self::String(..) => "STRING",
-            Self::Number(..) => "NUMBER",
-            Self::Identifier => "IDENTIFIER",
-            Self::And => "AND",
-            Self::Class => "CLASS",
-            Self::Else => "ELSE",
-            Self::False => "FALSE",
-            Self::For => "FOR",
-            Self::Fun => "FUN",
-            Self::If => "IF",
-            Self::Nil => "NIL",
-            Self::Or => "OR",
-            Self::Print => "PRINT",
-            Self::Return => "RETURN",
-            Self::Super => "SUPER",
-            Self::This => "THIS",
-            Self::True => "TRUE",
-            Self::Var => "VAR",
-            Self::While => "WHILE",
+            Self::LeftParen => ("LEFT_PAREN", None, None),
+            Self::RightParen => ("RIGHT_PAREN", None, None),
+            Self::LeftBrace => ("LEFT_BRACE", None, None),
+            Self::RightBrace => ("RIGHT_BRACE", None, None),
+            Self::Comma => ("COMMA", None, None),
+            Self::Dot => ("DOT", None, None),
+            Self::Minus => (
+                "MINUS",
+                Some(BinaryOperator::Minus),
+                Some(UnaryOperator::Negative),
+            ),
+            Self::Plus => ("PLUS", Some(BinaryOperator::Plus), None),
+            Self::Star => ("STAR", Some(BinaryOperator::Times), None),
+            Self::Semicolon => ("SEMICOLON", None, None),
+            Self::Slash => ("SLASH", Some(BinaryOperator::Divide), None),
+            Self::Equal => ("EQUAL", None, None),
+            Self::EqualEqual => ("EQUAL_EQUAL", Some(BinaryOperator::Equals), None),
+            Self::Bang => ("BANG", None, Some(UnaryOperator::Negation)),
+            Self::BangEqual => ("BANG_EQUAL", Some(BinaryOperator::NotEquals), None),
+            Self::Less => ("LESS", Some(BinaryOperator::Less), None),
+            Self::LessEqual => ("LESS_EQUAL", Some(BinaryOperator::LessEqual), None),
+            Self::Greater => ("GREATER", Some(BinaryOperator::Greater), None),
+            Self::GreaterEqual => ("GREATER_EQUAL", Some(BinaryOperator::GreaterEqual), None),
+            Self::String(..) => ("STRING", None, None),
+            Self::Number(..) => ("NUMBER", None, None),
+            Self::Identifier => ("IDENTIFIER", None, None),
+            Self::And => ("AND", None, None),
+            Self::Class => ("CLASS", None, None),
+            Self::Else => ("ELSE", None, None),
+            Self::False => ("FALSE", None, None),
+            Self::For => ("FOR", None, None),
+            Self::Fun => ("FUN", None, None),
+            Self::If => ("IF", None, None),
+            Self::Nil => ("NIL", None, None),
+            Self::Or => ("OR", None, None),
+            Self::Print => ("PRINT", None, None),
+            Self::Return => ("RETURN", None, None),
+            Self::Super => ("SUPER", None, None),
+            Self::This => ("THIS", None, None),
+            Self::True => ("TRUE", None, None),
+            Self::Var => ("VAR", None, None),
+            Self::While => ("WHILE", None, None),
         }
+    }
+
+    pub fn display_name(&self) -> &str {
+        self.props().0
     }
 
     pub fn check_reserved_word(lexeme: &str) -> Option<Self> {
