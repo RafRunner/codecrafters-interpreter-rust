@@ -65,7 +65,20 @@ impl<'a> Parser<'a> {
             match tok.kind {
                 TokenType::EqualEqual | TokenType::BangEqual => {
                     // Checked it existis and is a valid "==" or "!=" token
-                    left = self.create_binary_exp(left)?;
+                    let operation = self.lexer.next().unwrap().unwrap();
+                    let operator = operation.kind.props().1.unwrap();
+                    let rigth = self
+                        .advance()
+                        .and_then(|next_token| self.parse_unary(next_token))?;
+
+                    left = Expression::new(
+                        operation,
+                        ExpressionType::Binary {
+                            left: Box::new(left),
+                            operator,
+                            rigth: Box::new(rigth),
+                        },
+                    )
                 }
                 _ => break,
             }
@@ -84,7 +97,20 @@ impl<'a> Parser<'a> {
                 | TokenType::Less
                 | TokenType::LessEqual => {
                     // Checked it existis and is a valid ">", ">=", "<" or "<=" token
-                    left = self.create_binary_exp(left)?;
+                    let operation = self.lexer.next().unwrap().unwrap();
+                    let operator = operation.kind.props().1.unwrap();
+                    let rigth = self
+                        .advance()
+                        .and_then(|next_token| self.parse_unary(next_token))?;
+
+                    left = Expression::new(
+                        operation,
+                        ExpressionType::Binary {
+                            left: Box::new(left),
+                            operator,
+                            rigth: Box::new(rigth),
+                        },
+                    )
                 }
                 _ => break,
             }
@@ -100,7 +126,20 @@ impl<'a> Parser<'a> {
             match tok.kind {
                 TokenType::Plus | TokenType::Minus => {
                     // Checked it existis and is a valid "+" or "-" token
-                    left = self.create_binary_exp(left)?;
+                    let operation = self.lexer.next().unwrap().unwrap();
+                    let operator = operation.kind.props().1.unwrap();
+                    let rigth = self
+                        .advance()
+                        .and_then(|next_token| self.parse_unary(next_token))?;
+
+                    left = Expression::new(
+                        operation,
+                        ExpressionType::Binary {
+                            left: Box::new(left),
+                            operator,
+                            rigth: Box::new(rigth),
+                        },
+                    )
                 }
                 _ => break,
             }
@@ -116,7 +155,20 @@ impl<'a> Parser<'a> {
             match tok.kind {
                 TokenType::Star | TokenType::Slash => {
                     // Checked it existis and is a valid "*" or "/" token
-                    left = self.create_binary_exp(left)?;
+                    let operation = self.lexer.next().unwrap().unwrap();
+                    let operator = operation.kind.props().1.unwrap();
+                    let rigth = self
+                        .advance()
+                        .and_then(|next_token| self.parse_unary(next_token))?;
+
+                    left = Expression::new(
+                        operation,
+                        ExpressionType::Binary {
+                            left: Box::new(left),
+                            operator,
+                            rigth: Box::new(rigth),
+                        },
+                    )
                 }
                 _ => break,
             }
@@ -178,30 +230,6 @@ impl<'a> Parser<'a> {
             TokenType::Number(n) => Ok(LiteralExpression::Number { literal: n }),
             _ => Err(anyhow::anyhow!("Unexpected token at {:?}", token)),
         }
-    }
-
-    fn create_binary_exp(&mut self, left: Expression) -> Result<Expression, anyhow::Error> {
-        let operation = self
-            .lexer
-            .next()
-            .expect("Compiler bug. Check if next token exists")
-            .expect("Compiler Bug. Check if next token is Ok");
-        let operator = operation
-            .kind
-            .props()
-            .1
-            .expect("Compiler Bug. Check if TokenType has an associated BinaryOperator");
-        let next_token = self.advance()?;
-        let rigth = self.parse_unary(next_token)?;
-
-        Ok(Expression::new(
-            operation,
-            ExpressionType::Binary {
-                left: Box::new(left),
-                operator,
-                rigth: Box::new(rigth),
-            },
-        ))
     }
 
     fn advance(&mut self) -> Result<Token, anyhow::Error> {
