@@ -125,43 +125,48 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_primary(&mut self, token: Token) -> Result<Expression, ParserError> {
-        if token.kind == TokenType::LeftParen {
-            let next_token = self.advance(&token)?;
-            let inner = self.parse_expression(next_token)?;
+        match &token.kind {
+            TokenType::LeftParen => {
+                let next_token = self.advance(&token)?;
+                let inner = self.parse_expression(next_token)?;
 
-            let closing = self.advance_message(ParserError::new(
-                ParserErrorType::UnmatchedParenthesis,
-                inner.token.line,
-                inner.token.column,
-            ))?;
-            if closing.kind == TokenType::RightParen {
-                Ok(Expression::new(
-                    token,
-                    ExpressionType::Grouping {
-                        expr: Box::new(inner),
-                    },
-                ))
-            } else {
-                Err(ParserError::new(
+                let closing = self.advance_custom(ParserError::new(
                     ParserErrorType::UnmatchedParenthesis,
                     inner.token.line,
                     inner.token.column,
+                ))?;
+                if closing.kind == TokenType::RightParen {
+                    Ok(Expression::new(
+                        token,
+                        ExpressionType::Grouping {
+                            expr: Box::new(inner),
+                        },
+                    ))
+                } else {
+                    Err(ParserError::new(
+                        ParserErrorType::UnmatchedParenthesis,
+                        inner.token.line,
+                        inner.token.column,
+                    ))
+                }
+            }
+            TokenType::True => Ok(Expression::literal(token, LiteralExpression::True)),
+            TokenType::False => Ok(Expression::literal(token, LiteralExpression::False)),
+            TokenType::Nil => Ok(Expression::literal(token, LiteralExpression::Nil)),
+            TokenType::String(s) => {
+                let s = s.clone();
+                Ok(Expression::literal(
+                    token,
+                    LiteralExpression::String { literal: s },
                 ))
             }
-        } else {
-            let literal = self.parse_literal(token.clone())?;
-
-            Ok(Expression::new(token, ExpressionType::Literal { literal }))
-        }
-    }
-
-    fn parse_literal(&self, token: Token) -> Result<LiteralExpression, ParserError> {
-        match token.kind {
-            TokenType::True => Ok(LiteralExpression::True),
-            TokenType::False => Ok(LiteralExpression::False),
-            TokenType::Nil => Ok(LiteralExpression::Nil),
-            TokenType::String(s) => Ok(LiteralExpression::String { literal: s }),
-            TokenType::Number(n) => Ok(LiteralExpression::Number { literal: n }),
+            TokenType::Number(n) => {
+                let n = *n;
+                Ok(Expression::literal(
+                    token,
+                    LiteralExpression::Number { literal: n },
+                ))
+            }
             _ => Err(ParserError::new(
                 ParserErrorType::UnexpectedToken {
                     token: token.lexeme,
@@ -171,6 +176,8 @@ impl<'a> Parser<'a> {
             )),
         }
     }
+
+    // Helper functions
 
     fn parse_binary_operation<F>(
         &mut self,
@@ -208,14 +215,14 @@ impl<'a> Parser<'a> {
     }
 
     fn advance(&mut self, prev_token: &Token) -> Result<Token, ParserError> {
-        self.advance_message(ParserError::new(
+        self.advance_custom(ParserError::new(
             ParserErrorType::UnexpectedEof,
             prev_token.line,
             prev_token.column,
         ))
     }
 
-    fn advance_message(&mut self, error: ParserError) -> Result<Token, ParserError> {
+    fn advance_custom(&mut self, error: ParserError) -> Result<Token, ParserError> {
         match self.lexer.next() {
             Some(result) => result.map_err(|e| {
                 let (line, col) = (e.line, e.column);

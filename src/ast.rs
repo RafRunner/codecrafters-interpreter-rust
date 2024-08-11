@@ -56,6 +56,10 @@ impl Expression {
     pub fn new(token: Token, kind: ExpressionType) -> Self {
         Self { token, kind }
     }
+
+    pub fn literal(token: Token, literal: LiteralExpression) -> Self {
+        Self::new(token, ExpressionType::Literal { literal })
+    }
 }
 
 impl Display for Expression {
