@@ -415,7 +415,7 @@ mod tests {
 
     #[test]
     fn edge_cases() {
-        let source = "andor 3.\nprint -2.abs();\n";
+        let source = "andor 3.\n\nprint -2.abs();\n";
         let mut tokens = tokens_no_erros(source).into_iter();
 
         assert_eq!(
@@ -429,29 +429,29 @@ mod tests {
         assert_eq!(tokens.next(), Some(Token::new(TokenType::Dot, ".", 1, 8)));
         assert_eq!(
             tokens.next(),
-            Some(Token::new(TokenType::Print, "print", 2, 1))
+            Some(Token::new(TokenType::Print, "print", 3, 1))
         );
-        assert_eq!(tokens.next(), Some(Token::new(TokenType::Minus, "-", 2, 7)));
+        assert_eq!(tokens.next(), Some(Token::new(TokenType::Minus, "-", 3, 7)));
         assert_eq!(
             tokens.next(),
-            Some(Token::new(TokenType::Number(2.0), "2", 2, 8))
+            Some(Token::new(TokenType::Number(2.0), "2", 3, 8))
         );
-        assert_eq!(tokens.next(), Some(Token::new(TokenType::Dot, ".", 2, 9)));
+        assert_eq!(tokens.next(), Some(Token::new(TokenType::Dot, ".", 3, 9)));
         assert_eq!(
             tokens.next(),
-            Some(Token::new(TokenType::Identifier, "abs", 2, 10))
-        );
-        assert_eq!(
-            tokens.next(),
-            Some(Token::new(TokenType::LeftParen, "(", 2, 13))
+            Some(Token::new(TokenType::Identifier, "abs", 3, 10))
         );
         assert_eq!(
             tokens.next(),
-            Some(Token::new(TokenType::RightParen, ")", 2, 14))
+            Some(Token::new(TokenType::LeftParen, "(", 3, 13))
         );
         assert_eq!(
             tokens.next(),
-            Some(Token::new(TokenType::Semicolon, ";", 2, 15))
+            Some(Token::new(TokenType::RightParen, ")", 3, 14))
+        );
+        assert_eq!(
+            tokens.next(),
+            Some(Token::new(TokenType::Semicolon, ";", 3, 15))
         );
         assert_eq!(tokens.next(), None);
     }
