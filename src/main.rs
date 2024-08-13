@@ -54,7 +54,7 @@ fn main() {
         },
         "evaluate" => match parse_program(&file_contents)
             .map_err(|e| e.into())
-            .and_then(|program| evaluate(program))
+            .and_then(evaluate)
         {
             Ok(result) => println!("{}", result),
             Err(e) => {

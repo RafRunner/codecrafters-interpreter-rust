@@ -2,7 +2,7 @@ use crate::ast::{
     BinaryOperator, Expression, ExpressionType, LiteralExpression, Program, StatementType,
     UnaryOperator,
 };
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Ok, Result};
 
 use super::object::Object;
 
@@ -38,7 +38,8 @@ fn execute_expression(expression: Expression) -> Result<Object> {
                 UnaryOperator::Negation => match inner {
                     Object::True => Ok(Object::False),
                     Object::False => Ok(Object::True),
-                    _ => Err(anyhow!("Unary '!' can only be applied to booleans")),
+                    Object::Nil => Ok(Object::True),
+                    Object::Number(_) | Object::String(_) => Ok(Object::False),
                 },
             }
         }
