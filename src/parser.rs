@@ -10,6 +10,13 @@ use crate::{
     token::{Token, TokenError, TokenType},
 };
 
+pub fn parse_program(input: &str) -> Result<Program, ParserError> {
+    let lexer = Lexer::new(input);
+    let mut parser = Parser::new(lexer);
+
+    parser.parse_program()
+}
+
 /**
  * Lox Grammar so far:
  *
@@ -279,4 +286,110 @@ pub enum ParserErrorType {
 
     #[error("Unexpected end of file")]
     UnexpectedEof,
+}
+
+#[cfg(test)]
+mod tests {
+
+    fn parse_program(input: &str) -> String {
+        let program = super::parse_program(input).expect("Program did not parse correctly");
+
+        program.to_string()
+    }
+
+    #[test]
+    fn parse_literals() {
+        let tests = vec![
+            ("23", "23.0"),
+            ("\"str\"", "str"),
+            ("true", "true"),
+            ("false", "false"),
+        ];
+
+        for (input, expected) in tests {
+            assert_eq!(parse_program(input), expected);
+        }
+    }
+
+    #[test]
+    fn parse_binary_operation() {
+        let tests = vec![
+            ("32 + 124.32", "(+ 32.0 124.32)"),
+            ("nil * true", "(* nil true)"),
+            ("4323.0 - 43 + 321", "(+ (- 4323.0 43.0) 321.0)"),
+            ("2 + 3 * 5", "(+ 2.0 (* 3.0 5.0))"),
+            ("2 + 3 + 1 / 5", "(+ (+ 2.0 3.0) (/ 1.0 5.0))"),
+            ("(2 + 3) * 5", "(* (group (+ 2.0 3.0)) 5.0)"),
+        ];
+
+        for (input, expected) in tests {
+            assert_eq!(parse_program(input), expected);
+        }
+    }
+
+    #[test]
+    fn parse_unary_operations() {
+        let tests = vec![
+            ("-123", "(- 123.0)"),
+            ("!true", "(! true)"),
+            ("-false", "(- false)"),
+            ("!!true", "(! (! true))"),
+            ("- - 5", "(- (- 5.0))"),
+            ("-(5 + 3)", "(- (group (+ 5.0 3.0)))"),
+        ];
+
+        for (input, expected) in tests {
+            assert_eq!(parse_program(input), expected);
+        }
+    }
+
+    #[test]
+    fn parse_complex_expressions() {
+        let tests = vec![
+            ("-123 * 456 >= 3", "(>= (* (- 123.0) 456.0) 3.0)"),
+            ("!true == false", "(== (! true) false)"),
+            ("3 * -2 + 4", "(+ (* 3.0 (- 2.0)) 4.0)"),
+            (
+                "(5 - 3) * -(7 / 2)",
+                "(* (group (- 5.0 3.0)) (- (group (/ 7.0 2.0))))",
+            ),
+            (
+                "!!(nil == false) < 0",
+                "(< (! (! (group (== nil false)))) 0.0)",
+            ),
+            (
+                "(2 + 3) * -(5 + 1)",
+                "(* (group (+ 2.0 3.0)) (- (group (+ 5.0 1.0))))",
+            ),
+        ];
+
+        for (input, expected) in tests {
+            assert_eq!(parse_program(input), expected);
+        }
+    }
+
+    #[test]
+    fn parse_multiple_comparisons() {
+        let tests = vec![
+            ("-3 > 2", "(> (- 3.0) 2.0)"),
+            ("!5 < 4", "(< (! 5.0) 4.0)"),
+            ("7 == --7", "(== 7.0 (- (- 7.0)))"),
+            ("3 + 2 > 1 + 1", "(> (+ 3.0 2.0) (+ 1.0 1.0))"),
+            ("2 * 2 == 4", "(== (* 2.0 2.0) 4.0)"),
+            ("3 * (2 + 1) < 10", "(< (* 3.0 (group (+ 2.0 1.0))) 10.0)"),
+            ("3 + 2 * 4 == 14", "(== (+ 3.0 (* 2.0 4.0)) 14.0)"),
+            (
+                "(1 + 2) * 3 > 2 == true",
+                "(== (> (* (group (+ 1.0 2.0)) 3.0) 2.0) true)",
+            ),
+            ("4 / 2 <= 2 == false", "(== (<= (/ 4.0 2.0) 2.0) false)"),
+            ("2 < 3 > 1", "(> (< 2.0 3.0) 1.0)"),
+            ("1 + 2 == 3 > 0", "(== (+ 1.0 2.0) (> 3.0 0.0))"),
+            ("2 * 3 > 5 == 1 < 4", "(== (> (* 2.0 3.0) 5.0) (< 1.0 4.0))"),
+        ];
+
+        for (input, expected) in tests {
+            assert_eq!(parse_program(input), expected);
+        }
+    }
 }

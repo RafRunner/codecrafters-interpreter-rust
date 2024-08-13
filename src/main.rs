@@ -1,8 +1,9 @@
 use std::env;
 use std::fs;
 
+use interpreter_starter_rust::interpreter::evaluator::evaluate;
 use interpreter_starter_rust::lexer::Lexer;
-use interpreter_starter_rust::parser::Parser;
+use interpreter_starter_rust::parser::parse_program;
 
 fn main() {
     let args: Vec<String> = env::args().collect();
@@ -40,22 +41,27 @@ fn main() {
                 std::process::exit(65);
             }
         }
-        "parse" => {
-            let lexer = Lexer::new(&file_contents);
-            let mut parser = Parser::new(lexer);
-
-            match parser.parse_program() {
-                Ok(program) => {
-                    for stmt in program.statements {
-                        println!("{}", stmt);
-                    }
-                }
-                Err(e) => {
-                    eprintln!("{}", e);
-                    std::process::exit(65);
+        "parse" => match parse_program(&file_contents) {
+            Ok(program) => {
+                for stmt in program.statements {
+                    println!("{}", stmt);
                 }
             }
-        }
+            Err(e) => {
+                eprintln!("{}", e);
+                std::process::exit(65);
+            }
+        },
+        "evaluate" => match parse_program(&file_contents)
+            .map_err(|e| e.into())
+            .and_then(|program| evaluate(program))
+        {
+            Ok(result) => println!("{}", result),
+            Err(e) => {
+                eprintln!("{}", e);
+                std::process::exit(65);
+            }
+        },
         _ => {
             eprintln!("Unknown command: {}", command);
         }

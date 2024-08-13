@@ -21,6 +21,19 @@ impl Default for Program {
     }
 }
 
+impl Display for Program {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let as_str = self
+            .statements
+            .iter()
+            .map(|s| s.to_string())
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        write!(f, "{}", as_str)
+    }
+}
+
 #[derive(Debug)]
 pub struct Statement {
     pub token: Token,
