@@ -1,6 +1,7 @@
 use std::env;
 use std::fs;
 
+use interpreter_starter_rust::ast::Program;
 use interpreter_starter_rust::interpreter::evaluator::evaluate;
 use interpreter_starter_rust::lexer::Lexer;
 use interpreter_starter_rust::parser::parse_program;
@@ -41,29 +42,34 @@ fn main() {
                 std::process::exit(65);
             }
         }
-        "parse" => match parse_program(&file_contents) {
-            Ok(program) => {
-                for stmt in program.statements {
-                    println!("{}", stmt);
+        "parse" => {
+            let program = parse_program_or_exit(&file_contents);
+            for stmt in program.statements {
+                println!("{}", stmt);
+            }
+        }
+        "evaluate" => {
+            let program = parse_program_or_exit(&file_contents);
+            match evaluate(program) {
+                Ok(result) => println!("{}", result),
+                Err(e) => {
+                    eprintln!("{}", e);
+                    std::process::exit(70);
                 }
             }
-            Err(e) => {
-                eprintln!("{}", e);
-                std::process::exit(65);
-            }
-        },
-        "evaluate" => match parse_program(&file_contents)
-            .map_err(|e| e.into())
-            .and_then(evaluate)
-        {
-            Ok(result) => println!("{}", result),
-            Err(e) => {
-                eprintln!("{}", e);
-                std::process::exit(65);
-            }
-        },
+        }
         _ => {
             eprintln!("Unknown command: {}", command);
+        }
+    }
+}
+
+fn parse_program_or_exit(input: &str) -> Program {
+    match parse_program(input) {
+        Ok(program) => program,
+        Err(e) => {
+            eprintln!("{}", e);
+            std::process::exit(65);
         }
     }
 }
