@@ -25,7 +25,7 @@ impl Display for Object {
             Object::True => write!(f, "true"),
             Object::False => write!(f, "false"),
             Object::Nil => write!(f, "nil"),
-            Object::Number(n) => write!(f, "{:?}", n),
+            Object::Number(n) => write!(f, "{}", n),
             Object::String(s) => write!(f, "{}", s),
         }
     }
