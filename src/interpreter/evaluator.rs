@@ -2,7 +2,7 @@ use crate::ast::{
     BinaryOperator, Expression, ExpressionType, LiteralExpression, Program, StatementType,
     UnaryOperator,
 };
-use anyhow::{anyhow, Ok, Result};
+use anyhow::{anyhow, Result};
 
 use super::object::Object;
 
@@ -21,8 +21,8 @@ pub fn evaluate(program: Program) -> Result<Object> {
 fn execute_expression(expression: Expression) -> Result<Object> {
     match expression.kind {
         ExpressionType::Literal { literal } => match literal {
-            LiteralExpression::Number { literal } => Ok(Object::Number(literal)),
-            LiteralExpression::String { literal } => Ok(Object::String(literal)),
+            LiteralExpression::Number(literal) => Ok(Object::Number(literal)),
+            LiteralExpression::String(literal) => Ok(Object::String(literal)),
             LiteralExpression::True => Ok(Object::True),
             LiteralExpression::False => Ok(Object::False),
             LiteralExpression::Nil => Ok(Object::Nil),
@@ -98,5 +98,109 @@ fn execute_expression(expression: Expression) -> Result<Object> {
             }
         }
         ExpressionType::Grouping { expr } => execute_expression(*expr),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::parser::parse_program;
+
+    use super::*;
+
+    #[test]
+    fn test_evaluate_literals() {
+        let tests = vec![
+            ("nil", Object::Nil),
+            ("true", Object::True),
+            ("false", Object::False),
+            ("23", Object::Number(23.0)),
+            ("0.321", Object::Number(0.321)),
+            ("\"olá, mundo!\"", Object::String("olá, mundo!".to_string())),
+            ("\"\"", Object::String(String::new())),
+        ];
+
+        for (input, expected) in tests {
+            let program = parse_program(input).unwrap();
+            assert_eq!(evaluate(program).unwrap(), expected);
+        }
+    }
+
+    #[test]
+    fn test_evaluate_unary_operations() {
+        let tests = vec![
+            ("-5", Object::Number(-5.0)),
+            ("-3.14", Object::Number(-3.14)),
+            ("!true", Object::False),
+            ("!false", Object::True),
+            ("!!true", Object::True),
+            ("!nil", Object::False),
+        ];
+
+        for (input, expected) in tests {
+            let program = parse_program(input).unwrap();
+            assert_eq!(evaluate(program).unwrap(), expected);
+        }
+    }
+
+    #[test]
+    fn test_evaluate_binary_operations() {
+        let tests = vec![
+            ("3 + 4", Object::Number(7.0)),
+            ("10 - 2", Object::Number(8.0)),
+            ("2 * 3", Object::Number(6.0)),
+            ("8 / 2", Object::Number(4.0)),
+            ("1 < 2", Object::True),
+            ("2 > 1", Object::True),
+            ("1 == 1", Object::True),
+            ("1 != 2", Object::True),
+            ("1 <= 1", Object::True),
+            ("2 >= 2", Object::True),
+            (
+                "\"hello\" + \" world\"",
+                Object::String("hello world".to_string()),
+            ),
+            ("3 + 2 * 4", Object::Number(11.0)), // Test operator precedence
+            ("(3 + 2) * 4", Object::Number(20.0)), // Test grouping
+        ];
+
+        for (input, expected) in tests {
+            let program = parse_program(input).unwrap();
+            assert_eq!(evaluate(program).unwrap(), expected);
+        }
+    }
+
+    #[test]
+    fn test_evaluate_complex_expressions() {
+        let tests = vec![
+            ("-(-3 + 2) * 4", Object::Number(4.0)),
+            ("!(3 > 2)", Object::False),
+            ("(5 - 3) * -(7 / 2) - 10", Object::Number(-17.0)),
+            ("2 * 3 + 4 > 1 + 1", Object::True),
+            ("42 + 1 > 34 == 10 + 10 /2 < 32.43", Object::True),
+        ];
+
+        for (input, expected) in tests {
+            let program = parse_program(input).unwrap();
+            assert_eq!(evaluate(program).unwrap(), expected);
+        }
+    }
+
+    #[test]
+    fn test_evaluate_errors() {
+        let tests = vec![
+            ("!23", "Unary '!' can only be applied to booleans"),
+            (
+                "\"hello\" - \"world\"",
+                "Binary '-' can only be applied to numbers",
+            ),
+            ("5 / 0", "Division by zero is not allowed"),
+        ];
+
+        for (input, expected_err) in tests {
+            let program = parse_program(input).unwrap();
+            let result = evaluate(program);
+            assert!(result.is_err());
+            assert_eq!(result.unwrap_err().to_string(), expected_err);
+        }
     }
 }

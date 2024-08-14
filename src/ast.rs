@@ -111,8 +111,8 @@ pub enum ExpressionType {
 
 #[derive(Debug)]
 pub enum LiteralExpression {
-    Number { literal: f64 },
-    String { literal: String },
+    Number(f64),
+    String(String),
     True,
     False,
     Nil,
@@ -121,8 +121,8 @@ pub enum LiteralExpression {
 impl Display for LiteralExpression {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            LiteralExpression::Number { literal } => write!(f, "{:?}", literal),
-            LiteralExpression::String { literal } => write!(f, "{}", literal),
+            LiteralExpression::Number(literal) => write!(f, "{:?}", literal),
+            LiteralExpression::String(literal) => write!(f, "{}", literal),
             LiteralExpression::True => write!(f, "true"),
             LiteralExpression::False => write!(f, "false"),
             LiteralExpression::Nil => write!(f, "nil"),
@@ -191,7 +191,7 @@ mod tests {
     #[test]
     fn test_literal_expression_number() {
         let expr = fake_expression(ExpressionType::Literal {
-            literal: LiteralExpression::Number { literal: 45.67 },
+            literal: LiteralExpression::Number(45.67),
         });
         assert_eq!(expr.to_string(), "45.67");
     }
@@ -199,9 +199,7 @@ mod tests {
     #[test]
     fn test_literal_expression_string() {
         let expr = fake_expression(ExpressionType::Literal {
-            literal: LiteralExpression::String {
-                literal: "hello".to_string(),
-            },
+            literal: LiteralExpression::String("hello".to_string()),
         });
         assert_eq!(expr.to_string(), "hello");
     }
@@ -211,7 +209,7 @@ mod tests {
         let expr = fake_expression(ExpressionType::Unary {
             operator: UnaryOperator::Negative,
             expr: Box::new(fake_expression(ExpressionType::Literal {
-                literal: LiteralExpression::Number { literal: 123.0 },
+                literal: LiteralExpression::Number(123.0),
             })),
         });
         assert_eq!(expr.to_string(), "(- 123.0)");
@@ -223,13 +221,13 @@ mod tests {
             left: Box::new(fake_expression(ExpressionType::Unary {
                 operator: UnaryOperator::Negative,
                 expr: Box::new(fake_expression(ExpressionType::Literal {
-                    literal: LiteralExpression::Number { literal: 123.0 },
+                    literal: LiteralExpression::Number(123.0),
                 })),
             })),
             operator: BinaryOperator::Times,
             rigth: Box::new(fake_expression(ExpressionType::Grouping {
                 expr: Box::new(fake_expression(ExpressionType::Literal {
-                    literal: LiteralExpression::Number { literal: 45.67 },
+                    literal: LiteralExpression::Number(45.67),
                 })),
             })),
         });
@@ -240,7 +238,7 @@ mod tests {
     fn test_grouping_expression() {
         let expr = fake_expression(ExpressionType::Grouping {
             expr: Box::new(fake_expression(ExpressionType::Literal {
-                literal: LiteralExpression::Number { literal: 45.67 },
+                literal: LiteralExpression::Number(45.67),
             })),
         });
         assert_eq!(expr.to_string(), "(group 45.67)");

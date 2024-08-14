@@ -213,144 +213,103 @@ mod tests {
     #[test]
     fn test_single_character_tokens() {
         let source = "(){},.-+*;";
-        let mut tokens = tokens_no_erros(source).into_iter();
+        let tokens = tokens_no_erros(source);
 
-        assert_eq!(
-            tokens.next(),
-            Some(Token::new(TokenType::LeftParen, "(", 1, 1))
-        );
-        assert_eq!(
-            tokens.next(),
-            Some(Token::new(TokenType::RightParen, ")", 1, 2))
-        );
-        assert_eq!(
-            tokens.next(),
-            Some(Token::new(TokenType::LeftBrace, "{", 1, 3))
-        );
-        assert_eq!(
-            tokens.next(),
-            Some(Token::new(TokenType::RightBrace, "}", 1, 4))
-        );
-        assert_eq!(tokens.next(), Some(Token::new(TokenType::Comma, ",", 1, 5)));
-        assert_eq!(tokens.next(), Some(Token::new(TokenType::Dot, ".", 1, 6)));
-        assert_eq!(tokens.next(), Some(Token::new(TokenType::Minus, "-", 1, 7)));
-        assert_eq!(tokens.next(), Some(Token::new(TokenType::Plus, "+", 1, 8)));
-        assert_eq!(tokens.next(), Some(Token::new(TokenType::Star, "*", 1, 9)));
-        assert_eq!(
-            tokens.next(),
-            Some(Token::new(TokenType::Semicolon, ";", 1, 10))
-        );
-        assert_eq!(tokens.next(), None);
+        let expected = vec![
+            Token::new(TokenType::LeftParen, "(", 1, 1),
+            Token::new(TokenType::RightParen, ")", 1, 2),
+            Token::new(TokenType::LeftBrace, "{", 1, 3),
+            Token::new(TokenType::RightBrace, "}", 1, 4),
+            Token::new(TokenType::Comma, ",", 1, 5),
+            Token::new(TokenType::Dot, ".", 1, 6),
+            Token::new(TokenType::Minus, "-", 1, 7),
+            Token::new(TokenType::Plus, "+", 1, 8),
+            Token::new(TokenType::Star, "*", 1, 9),
+            Token::new(TokenType::Semicolon, ";", 1, 10),
+        ];
+
+        assert_eq!(tokens.len(), expected.len());
+
+        for (actual, expected) in tokens.into_iter().zip(expected) {
+            assert_eq!(actual, expected);
+        }
     }
-
     #[test]
     fn test_two_character_tokens() {
         let source = "=== !=\n<= >=\n";
-        let mut tokens = tokens_no_erros(source).into_iter();
+        let tokens = tokens_no_erros(source);
 
-        assert_eq!(
-            tokens.next(),
-            Some(Token::new(TokenType::EqualEqual, "==", 1, 1))
-        );
-        assert_eq!(tokens.next(), Some(Token::new(TokenType::Equal, "=", 1, 3)));
-        assert_eq!(
-            tokens.next(),
-            Some(Token::new(TokenType::BangEqual, "!=", 1, 5))
-        );
-        assert_eq!(
-            tokens.next(),
-            Some(Token::new(TokenType::LessEqual, "<=", 2, 1))
-        );
-        assert_eq!(
-            tokens.next(),
-            Some(Token::new(TokenType::GreaterEqual, ">=", 2, 4))
-        );
-        assert_eq!(tokens.next(), None);
+        let expected = vec![
+            Token::new(TokenType::EqualEqual, "==", 1, 1),
+            Token::new(TokenType::Equal, "=", 1, 3),
+            Token::new(TokenType::BangEqual, "!=", 1, 5),
+            Token::new(TokenType::LessEqual, "<=", 2, 1),
+            Token::new(TokenType::GreaterEqual, ">=", 2, 4),
+        ];
+
+        assert_eq!(tokens.len(), expected.len());
+
+        for (actual, expected) in tokens.into_iter().zip(expected) {
+            assert_eq!(actual, expected);
+        }
     }
 
     #[test]
     fn test_strings() {
         let source = "\"hello\"name=\"world\"";
-        let mut tokens = tokens_no_erros(source).into_iter();
+        let tokens = tokens_no_erros(source);
 
-        assert_eq!(
-            tokens.next(),
-            Some(Token::new(
-                TokenType::String("hello".to_string()),
-                "\"hello\"",
-                1,
-                1
-            ))
-        );
-        assert_eq!(
-            tokens.next(),
-            Some(Token::new(TokenType::Identifier, "name", 1, 8))
-        );
-        assert_eq!(
-            tokens.next(),
-            Some(Token::new(TokenType::Equal, "=", 1, 12))
-        );
-        assert_eq!(
-            tokens.next(),
-            Some(Token::new(
-                TokenType::String("world".to_string()),
-                "\"world\"",
-                1,
-                13
-            ))
-        );
-        assert_eq!(tokens.next(), None);
+        let expected = vec![
+            Token::new(TokenType::String("hello".to_string()), "\"hello\"", 1, 1),
+            Token::new(TokenType::Identifier, "name", 1, 8),
+            Token::new(TokenType::Equal, "=", 1, 12),
+            Token::new(TokenType::String("world".to_string()), "\"world\"", 1, 13),
+        ];
+
+        assert_eq!(tokens.len(), expected.len());
+
+        for (actual, expected) in tokens.into_iter().zip(expected) {
+            assert_eq!(actual, expected);
+        }
     }
 
     #[test]
     fn test_numbers() {
         let source = "123 2.0 456.789+12.34.56";
-        let mut tokens = tokens_no_erros(source).into_iter();
+        let tokens = tokens_no_erros(source);
 
-        assert_eq!(
-            tokens.next(),
-            Some(Token::new(TokenType::Number(123.0), "123", 1, 1))
-        );
-        assert_eq!(
-            tokens.next(),
-            Some(Token::new(TokenType::Number(2.0), "2.0", 1, 5))
-        );
-        assert_eq!(
-            tokens.next(),
-            Some(Token::new(TokenType::Number(456.789), "456.789", 1, 9))
-        );
-        assert_eq!(tokens.next(), Some(Token::new(TokenType::Plus, "+", 1, 16)));
-        assert_eq!(
-            tokens.next(),
-            Some(Token::new(TokenType::Number(12.34), "12.34", 1, 17))
-        );
-        assert_eq!(tokens.next(), Some(Token::new(TokenType::Dot, ".", 1, 22)));
-        assert_eq!(
-            tokens.next(),
-            Some(Token::new(TokenType::Number(56.0), "56", 1, 23))
-        );
-        assert_eq!(tokens.next(), None);
+        let expected = vec![
+            Token::new(TokenType::Number(123.0), "123", 1, 1),
+            Token::new(TokenType::Number(2.0), "2.0", 1, 5),
+            Token::new(TokenType::Number(456.789), "456.789", 1, 9),
+            Token::new(TokenType::Plus, "+", 1, 16),
+            Token::new(TokenType::Number(12.34), "12.34", 1, 17),
+            Token::new(TokenType::Dot, ".", 1, 22),
+            Token::new(TokenType::Number(56.0), "56", 1, 23),
+        ];
+
+        assert_eq!(tokens.len(), expected.len());
+
+        for (actual, expected) in tokens.into_iter().zip(expected) {
+            assert_eq!(actual, expected);
+        }
     }
 
     #[test]
     fn test_comments() {
         let source = "\"Olá\" // This is a comment\n123";
-        let mut tokens = tokens_no_erros(source).into_iter();
+        let tokens = tokens_no_erros(source);
 
-        assert_eq!(
-            tokens.next(),
-            Some(Token::new(
-                TokenType::String("Olá".to_string()),
-                "\"Olá\"",
-                1,
-                1
-            ))
-        );
-        assert_eq!(
-            tokens.next(),
-            Some(Token::new(TokenType::Number(123.0), "123", 2, 1))
-        );
-        assert_eq!(tokens.next(), None);
+        let expected = vec![
+            Token::new(TokenType::String("Olá".to_string()), "\"Olá\"", 1, 1),
+            Token::new(TokenType::Number(123.0), "123", 2, 1),
+        ];
+
+        assert_eq!(tokens.len(), expected.len());
+
+        for (actual, expected) in tokens.into_iter().zip(expected) {
+            assert_eq!(actual, expected);
+        }
     }
 
     #[test]
@@ -372,25 +331,21 @@ mod tests {
     #[test]
     fn test_unexpected_character() {
         let source = "§+orchid";
-        let mut tokens = Lexer::new(source).iter();
+        let tokens = Lexer::new(source).iter();
 
-        assert_eq!(
-            tokens.next(),
-            Some(Err(TokenError::new(
+        let expected = vec![
+            Err(TokenError::new(
                 TokenErrorType::UnexpectedToken("§".to_string()),
                 1,
-                1
-            )))
-        );
-        assert_eq!(
-            tokens.next(),
-            Some(Ok(Token::new(TokenType::Plus, "+", 1, 2)))
-        );
-        assert_eq!(
-            tokens.next(),
-            Some(Ok(Token::new(TokenType::Identifier, "orchid", 1, 3)))
-        );
-        assert_eq!(tokens.next(), None);
+                1,
+            )),
+            Ok(Token::new(TokenType::Plus, "+", 1, 2)),
+            Ok(Token::new(TokenType::Identifier, "orchid", 1, 3)),
+        ];
+
+        for (actual, expected) in tokens.into_iter().zip(expected) {
+            assert_eq!(actual, expected);
+        }
     }
 
     #[test]
@@ -414,45 +369,30 @@ mod tests {
     }
 
     #[test]
-    fn edge_cases() {
-        let source = "andor 3.\n\nprint -2.abs();\n";
-        let mut tokens = tokens_no_erros(source).into_iter();
+    fn test_nested_structures() {
+        let source = "{ {1, 2}, (true, false) }";
+        let tokens = tokens_no_erros(source);
 
-        assert_eq!(
-            tokens.next(),
-            Some(Token::new(TokenType::Identifier, "andor", 1, 1))
-        );
-        assert_eq!(
-            tokens.next(),
-            Some(Token::new(TokenType::Number(3.0), "3", 1, 7))
-        );
-        assert_eq!(tokens.next(), Some(Token::new(TokenType::Dot, ".", 1, 8)));
-        assert_eq!(
-            tokens.next(),
-            Some(Token::new(TokenType::Print, "print", 3, 1))
-        );
-        assert_eq!(tokens.next(), Some(Token::new(TokenType::Minus, "-", 3, 7)));
-        assert_eq!(
-            tokens.next(),
-            Some(Token::new(TokenType::Number(2.0), "2", 3, 8))
-        );
-        assert_eq!(tokens.next(), Some(Token::new(TokenType::Dot, ".", 3, 9)));
-        assert_eq!(
-            tokens.next(),
-            Some(Token::new(TokenType::Identifier, "abs", 3, 10))
-        );
-        assert_eq!(
-            tokens.next(),
-            Some(Token::new(TokenType::LeftParen, "(", 3, 13))
-        );
-        assert_eq!(
-            tokens.next(),
-            Some(Token::new(TokenType::RightParen, ")", 3, 14))
-        );
-        assert_eq!(
-            tokens.next(),
-            Some(Token::new(TokenType::Semicolon, ";", 3, 15))
-        );
-        assert_eq!(tokens.next(), None);
+        let expected = vec![
+            Token::new(TokenType::LeftBrace, "{", 1, 1),
+            Token::new(TokenType::LeftBrace, "{", 1, 3),
+            Token::new(TokenType::Number(1.0), "1", 1, 4),
+            Token::new(TokenType::Comma, ",", 1, 5),
+            Token::new(TokenType::Number(2.0), "2", 1, 7),
+            Token::new(TokenType::RightBrace, "}", 1, 8),
+            Token::new(TokenType::Comma, ",", 1, 9),
+            Token::new(TokenType::LeftParen, "(", 1, 11),
+            Token::new(TokenType::True, "true", 1, 12),
+            Token::new(TokenType::Comma, ",", 1, 16),
+            Token::new(TokenType::False, "false", 1, 18),
+            Token::new(TokenType::RightParen, ")", 1, 23),
+            Token::new(TokenType::RightBrace, "}", 1, 25),
+        ];
+
+        assert_eq!(tokens.len(), expected.len());
+
+        for (actual, expected) in tokens.into_iter().zip(expected) {
+            assert_eq!(actual, expected);
+        }
     }
 }

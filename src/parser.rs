@@ -162,17 +162,11 @@ impl<'a> Parser<'a> {
             TokenType::Nil => Ok(Expression::literal(token, LiteralExpression::Nil)),
             TokenType::String(s) => {
                 let s = s.clone();
-                Ok(Expression::literal(
-                    token,
-                    LiteralExpression::String { literal: s },
-                ))
+                Ok(Expression::literal(token, LiteralExpression::String(s)))
             }
             TokenType::Number(n) => {
                 let n = *n;
-                Ok(Expression::literal(
-                    token,
-                    LiteralExpression::Number { literal: n },
-                ))
+                Ok(Expression::literal(token, LiteralExpression::Number(n)))
             }
             _ => Err(ParserError::new(
                 ParserErrorType::UnexpectedToken {
