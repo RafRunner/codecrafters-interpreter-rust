@@ -6,16 +6,31 @@ use anyhow::{anyhow, Result};
 
 use super::object::Object;
 
-pub fn evaluate(program: Program) -> Result<Object> {
-    let mut output = Object::Nil;
+pub struct Interpreter {}
 
-    for stmt in program.statements {
-        output = match stmt.kind {
-            StatementType::Expression { expr } => execute_expression(expr)?,
-        };
+impl Interpreter {
+    pub fn new() -> Self {
+        Self {}
     }
 
-    Ok(output)
+    pub fn evaluate(&mut self, program: Program) -> Result<Option<Object>> {
+        let mut output = None;
+
+        for stmt in program.statements {
+            output = match stmt.kind {
+                StatementType::Expression { expr } => Some(execute_expression(expr)?),
+                StatementType::Print { expr } => {
+                    let to_print = execute_expression(expr)?;
+
+                    println!("{}", to_print);
+
+                    None
+                }
+            };
+        }
+
+        Ok(output)
+    }
 }
 
 fn execute_expression(expression: Expression) -> Result<Object> {
@@ -36,10 +51,8 @@ fn execute_expression(expression: Expression) -> Result<Object> {
                     _ => Err(anyhow!("Unary '-' can only be applied to numbers")),
                 },
                 UnaryOperator::Negation => match inner {
-                    Object::True => Ok(Object::False),
-                    Object::False => Ok(Object::True),
-                    Object::Nil => Ok(Object::True),
-                    Object::Number(_) | Object::String(_) => Ok(Object::False),
+                    Object::False | Object::Nil => Ok(Object::True),
+                    Object::True | Object::Number(_) | Object::String(_) => Ok(Object::False),
                 },
             }
         }
@@ -107,6 +120,10 @@ mod tests {
 
     use super::*;
 
+    fn evaluate(program: Program) -> Result<Object> {
+        Interpreter::new().evaluate(program).map(|res| res.unwrap())
+    }
+
     #[test]
     fn test_evaluate_literals() {
         let tests = vec![
@@ -121,7 +138,7 @@ mod tests {
 
         for (input, expected) in tests {
             let program = parse_program(input).unwrap();
-            assert_eq!(evaluate(program).unwrap(), expected);
+            assert_eq!(evaluate(program).unwrap(), expected, "Input: {}", input);
         }
     }
 
@@ -133,12 +150,12 @@ mod tests {
             ("!true", Object::False),
             ("!false", Object::True),
             ("!!true", Object::True),
-            ("!nil", Object::False),
+            ("!nil", Object::True),
         ];
 
         for (input, expected) in tests {
             let program = parse_program(input).unwrap();
-            assert_eq!(evaluate(program).unwrap(), expected);
+            assert_eq!(evaluate(program).unwrap(), expected, "Input: {}", input);
         }
     }
 
@@ -165,7 +182,7 @@ mod tests {
 
         for (input, expected) in tests {
             let program = parse_program(input).unwrap();
-            assert_eq!(evaluate(program).unwrap(), expected);
+            assert_eq!(evaluate(program).unwrap(), expected, "Input: {}", input);
         }
     }
 
@@ -181,26 +198,38 @@ mod tests {
 
         for (input, expected) in tests {
             let program = parse_program(input).unwrap();
-            assert_eq!(evaluate(program).unwrap(), expected);
+            assert_eq!(evaluate(program).unwrap(), expected, "Input: {}", input);
         }
     }
 
     #[test]
     fn test_evaluate_errors() {
         let tests = vec![
-            ("!23", "Unary '!' can only be applied to booleans"),
             (
                 "\"hello\" - \"world\"",
                 "Binary '-' can only be applied to numbers",
             ),
             ("5 / 0", "Division by zero is not allowed"),
+            (
+                "37 + \"foo\" + 47",
+                "Binary '+' can only be applied to numbers or concatenated with strings",
+            ),
+            (
+                "true >= false",
+                "Binary '>=' can only be applied to numbers",
+            ),
         ];
 
         for (input, expected_err) in tests {
             let program = parse_program(input).unwrap();
             let result = evaluate(program);
-            assert!(result.is_err());
-            assert_eq!(result.unwrap_err().to_string(), expected_err);
+            assert!(result.is_err(), "Expression {} should be an error", input);
+            assert_eq!(
+                result.unwrap_err().to_string(),
+                expected_err,
+                "Input: {}",
+                input
+            );
         }
     }
 }

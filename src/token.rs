@@ -173,7 +173,7 @@ impl Display for Token {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct TokenError {
     pub error: TokenErrorType,
     pub line: usize,
@@ -202,7 +202,7 @@ impl Error for TokenError {
     }
 }
 
-#[derive(thiserror::Error, Debug, PartialEq)]
+#[derive(thiserror::Error, Debug, PartialEq, Clone)]
 pub enum TokenErrorType {
     #[error("Unexpected character: {0}")]
     UnexpectedToken(String),

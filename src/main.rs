@@ -2,7 +2,7 @@ use std::env;
 use std::fs;
 
 use interpreter_starter_rust::ast::Program;
-use interpreter_starter_rust::interpreter::evaluator::evaluate;
+use interpreter_starter_rust::interpreter::evaluator::Interpreter;
 use interpreter_starter_rust::lexer::Lexer;
 use interpreter_starter_rust::parser::parse_program;
 
@@ -48,10 +48,13 @@ fn main() {
                 println!("{}", stmt);
             }
         }
-        "evaluate" => {
+        "evaluate" | "run" => {
             let program = parse_program_or_exit(&file_contents);
-            match evaluate(program) {
-                Ok(result) => println!("{}", result),
+            let mut interpreter = Interpreter::new();
+
+            match interpreter.evaluate(program) {
+                Ok(Some(result)) => println!("{}", result),
+                Ok(None) => {}
                 Err(e) => {
                     eprintln!("{}", e);
                     std::process::exit(70);

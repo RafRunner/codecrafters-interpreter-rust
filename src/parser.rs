@@ -20,15 +20,20 @@ pub fn parse_program(input: &str) -> Result<Program, ParserError> {
 /**
  * Lox Grammar so far:
  *
- * expression     → equality ;
- * equality       → comparison ( ( "!=" | "==" ) comparison )* ;
- * comparison     → term ( ( ">" | ">=" | "<" | "<=" ) term )* ;
- * term           → factor ( ( "-" | "+" ) factor )* ;
- * factor         → unary ( ( "/" | "*" ) unary )* ;
- * unary          → ( "!" | "-" ) unary
- *                | primary ;
- * primary        → NUMBER | STRING | "true" | "false" | "nil"
- *                | "(" expression ")" ;
+ * program        -> statement* EOF ;
+ * statement      -> exprStmt
+ *                 | printStmt ;
+ * exprStmt       -> expression ";" ;
+ * printStmt      -> "print" expression ";" ;
+ * expression     -> equality
+ * equality       -> comparison ( ( "!=" | "==" ) comparison )* ;
+ * comparison     -> term ( ( ">" | ">=" | "<" | "<=" ) term )* ;
+ * term           -> factor ( ( "-" | "+" ) factor )* ;
+ * factor         -> unary ( ( "/" | "*" ) unary )* ;
+ * unary          -> ( "!" | "-" ) unary
+ *                 | primary ;
+ * primary        -> NUMBER | STRING | "true" | "false" | "nil"
+ *                 | "(" expression ")" ;
  */
 
 pub struct Parser<'a> {
@@ -64,12 +69,30 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_statement(&mut self, token: Token) -> Result<Statement, ParserError> {
-        let expression = self.parse_expression(token.clone())?;
+        match &token.kind {
+            TokenType::Print => {
+                let expr_token = self.advance(&token)?;
+                let expression = self.parse_expression(expr_token.clone())?;
 
-        Ok(Statement::new(
-            token,
-            StatementType::Expression { expr: expression },
-        ))
+                self.advance_expecting(
+                    &expression.token,
+                    TokenType::Semicolon,
+                    ParserErrorType::MissingSemicolen,
+                )?;
+                Ok(Statement::new(
+                    token,
+                    StatementType::Print { expr: expression },
+                ))
+            }
+            _ => {
+                let expression = self.parse_expression(token.clone())?;
+
+                Ok(Statement::new(
+                    token,
+                    StatementType::Expression { expr: expression },
+                ))
+            }
+        }
     }
 
     fn parse_expression(&mut self, token: Token) -> Result<Expression, ParserError> {
@@ -137,25 +160,17 @@ impl<'a> Parser<'a> {
                 let next_token = self.advance(&token)?;
                 let inner = self.parse_expression(next_token)?;
 
-                let closing = self.advance_custom(ParserError::new(
+                self.advance_expecting(
+                    &inner.token,
+                    TokenType::RightParen,
                     ParserErrorType::UnmatchedParenthesis,
-                    inner.token.line,
-                    inner.token.column,
-                ))?;
-                if closing.kind == TokenType::RightParen {
-                    Ok(Expression::new(
-                        token,
-                        ExpressionType::Grouping {
-                            expr: Box::new(inner),
-                        },
-                    ))
-                } else {
-                    Err(ParserError::new(
-                        ParserErrorType::UnmatchedParenthesis,
-                        inner.token.line,
-                        inner.token.column,
-                    ))
-                }
+                )?;
+                Ok(Expression::new(
+                    token,
+                    ExpressionType::Grouping {
+                        expr: Box::new(inner),
+                    },
+                ))
             }
             TokenType::True => Ok(Expression::literal(token, LiteralExpression::True)),
             TokenType::False => Ok(Expression::literal(token, LiteralExpression::False)),
@@ -216,25 +231,39 @@ impl<'a> Parser<'a> {
     }
 
     fn advance(&mut self, prev_token: &Token) -> Result<Token, ParserError> {
-        self.advance_custom(ParserError::new(
-            ParserErrorType::UnexpectedEof,
-            prev_token.line,
-            prev_token.column,
-        ))
+        self.advance_custom(prev_token, ParserErrorType::UnexpectedEof)
     }
 
-    fn advance_custom(&mut self, error: ParserError) -> Result<Token, ParserError> {
+    fn advance_expecting(
+        &mut self,
+        prev_token: &Token,
+        expected: TokenType,
+        error: ParserErrorType,
+    ) -> Result<Token, ParserError> {
+        let next = self.advance_custom(prev_token, error.clone())?;
+        if next.kind == expected {
+            Ok(next)
+        } else {
+            Err(ParserError::new(error, prev_token.line, prev_token.column))
+        }
+    }
+
+    fn advance_custom(
+        &mut self,
+        prev_token: &Token,
+        error: ParserErrorType,
+    ) -> Result<Token, ParserError> {
         match self.lexer.next() {
             Some(result) => result.map_err(|e| {
                 let (line, col) = (e.line, e.column);
                 ParserError::new(ParserErrorType::TokenError { error: e }, line, col)
             }),
-            None => Err(error),
+            None => Err(ParserError::new(error, prev_token.line, prev_token.column)),
         }
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct ParserError {
     pub error: ParserErrorType,
     pub line: usize,
@@ -267,13 +296,16 @@ impl Error for ParserError {
     }
 }
 
-#[derive(Debug, thiserror::Error, PartialEq)]
+#[derive(Debug, thiserror::Error, PartialEq, Clone)]
 pub enum ParserErrorType {
     #[error("Unexpected token '{token}'")]
     UnexpectedToken { token: String },
 
     #[error("Expected closing ')'")]
     UnmatchedParenthesis,
+
+    #[error("Missing ';'")]
+    MissingSemicolen,
 
     #[error("{error}")]
     TokenError { error: TokenError },
@@ -301,7 +333,7 @@ mod tests {
         ];
 
         for (input, expected) in tests {
-            assert_eq!(parse_program(input), expected);
+            assert_eq!(parse_program(input), expected, "Input: {}", input);
         }
     }
 
@@ -317,7 +349,7 @@ mod tests {
         ];
 
         for (input, expected) in tests {
-            assert_eq!(parse_program(input), expected);
+            assert_eq!(parse_program(input), expected, "Input: {}", input);
         }
     }
 
@@ -333,7 +365,7 @@ mod tests {
         ];
 
         for (input, expected) in tests {
-            assert_eq!(parse_program(input), expected);
+            assert_eq!(parse_program(input), expected, "Input: {}", input);
         }
     }
 
@@ -358,7 +390,7 @@ mod tests {
         ];
 
         for (input, expected) in tests {
-            assert_eq!(parse_program(input), expected);
+            assert_eq!(parse_program(input), expected, "Input: {}", input);
         }
     }
 
@@ -383,7 +415,7 @@ mod tests {
         ];
 
         for (input, expected) in tests {
-            assert_eq!(parse_program(input), expected);
+            assert_eq!(parse_program(input), expected, "Input: {}", input);
         }
     }
 }

@@ -50,6 +50,7 @@ impl Display for Statement {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match &self.kind {
             StatementType::Expression { expr } => write!(f, "{}", expr),
+            StatementType::Print { expr } => write!(f, "print {};", expr),
         }
     }
 }
@@ -57,6 +58,7 @@ impl Display for Statement {
 #[derive(Debug)]
 pub enum StatementType {
     Expression { expr: Expression },
+    Print { expr: Expression },
 }
 
 #[derive(Debug)]
