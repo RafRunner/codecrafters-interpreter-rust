@@ -21,10 +21,13 @@ pub fn parse_program(input: &str) -> Result<Program, ParserError> {
  * Lox Grammar so far:
  *
  * program        -> statement* EOF ;
+ *
  * statement      -> exprStmt
  *                 | printStmt ;
- * exprStmt       -> expression ";" ;
+ * // the '?' is a deviation from the book to apeasse codecrafters tests without many hacks
+ * exprStmt       -> expression ";"? ;
  * printStmt      -> "print" expression ";" ;
+ *
  * expression     -> equality
  * equality       -> comparison ( ( "!=" | "==" ) comparison )* ;
  * comparison     -> term ( ( ">" | ">=" | "<" | "<=" ) term )* ;
@@ -87,6 +90,11 @@ impl<'a> Parser<'a> {
             _ => {
                 let expression = self.parse_expression(token.clone())?;
 
+                if let Some(Ok(next)) = self.lexer.peek() {
+                    if next.kind == TokenType::Semicolon {
+                        self.lexer.next();
+                    }
+                }
                 Ok(Statement::new(
                     token,
                     StatementType::Expression { expr: expression },

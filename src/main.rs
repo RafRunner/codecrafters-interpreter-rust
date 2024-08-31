@@ -53,7 +53,11 @@ fn main() {
             let mut interpreter = Interpreter::new();
 
             match interpreter.evaluate(program) {
-                Ok(Some(result)) => println!("{}", result),
+                Ok(Some(result)) => {
+                    if command == "evaluate" {
+                        println!("{}", result);
+                    }
+                }
                 Ok(None) => {}
                 Err(e) => {
                     eprintln!("{}", e);
