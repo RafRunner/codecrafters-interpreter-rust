@@ -1,16 +1,22 @@
+use std::collections::HashMap;
+
 use crate::ast::{
-    BinaryOperator, Expression, ExpressionType, LiteralExpression, Program, StatementType,
-    UnaryOperator,
+    BinaryOperator, DeclaraionStatement, Expression, ExpressionType, IdentifierStruct, LiteralExpression, Program, StatementType, UnaryOperator
 };
 use anyhow::{anyhow, Result};
 
 use super::object::Object;
 
-pub struct Interpreter {}
+pub struct Interpreter {
+    // TODO just a temp env to pass the first stage
+    env: HashMap<String, Object>
+}
 
 impl Interpreter {
     pub fn new() -> Self {
-        Self {}
+        Self {
+            env: HashMap::new()
+        }
     }
 
     pub fn evaluate(&mut self, program: Program) -> Result<Option<Object>> {
@@ -26,6 +32,21 @@ impl Interpreter {
 
                     None
                 }
+                StatementType::Declaration { stmt } => {
+                    match stmt {
+                        DeclaraionStatement::VarDeclaration { identifier, value } => {
+                            let value = if let Some(expr) = value {
+                                self.execute_expression(expr)?
+                            } else {
+                                Object::Nil
+                            };
+
+                            self.env.insert(identifier.name, value);
+
+                            None
+                        },
+                    }
+                },
             };
         }
 
@@ -49,10 +70,7 @@ impl Interpreter {
                         Object::Number(n) => Ok(Object::Number(-n)),
                         _ => Err(anyhow!("Unary '-' can only be applied to numbers")),
                     },
-                    UnaryOperator::Negation => match inner {
-                        Object::False | Object::Nil => Ok(Object::True),
-                        Object::True | Object::Number(_) | Object::String(_) => Ok(Object::False),
-                    },
+                    UnaryOperator::Negation => Ok(Object::bool_as_obj(!inner.is_truthy())),
                 }
             }
             ExpressionType::Binary {
@@ -110,6 +128,9 @@ impl Interpreter {
                 }
             }
             ExpressionType::Grouping { expr } => self.execute_expression(*expr),
+            ExpressionType::Identifier(IdentifierStruct { name }) => {
+                self.env.get(&name).cloned().ok_or(anyhow!("Undefined variable '{}'", name))
+            },
         }
     }
 }

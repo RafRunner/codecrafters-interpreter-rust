@@ -20,7 +20,11 @@ pub fn parse_program(input: &str) -> Result<Program, ParserError> {
 /**
  * Lox Grammar so far:
  *
- * program        -> statement* EOF ;
+ * program        -> declaration* EOF ;
+ *
+ * declaration    -> varDecl
+ *                 | statement ;
+ * varDecl        -> "var" IDENTIFIER ( "=" expression )? ";" ;
  *
  * statement      -> exprStmt
  *                 | printStmt ;
@@ -36,7 +40,7 @@ pub fn parse_program(input: &str) -> Result<Program, ParserError> {
  * unary          -> ( "!" | "-" ) unary
  *                 | primary ;
  * primary        -> NUMBER | STRING | "true" | "false" | "nil"
- *                 | "(" expression ")" ;
+ *                 | "(" expression ") | IDENTIFIER ;
  */
 
 pub struct Parser<'a> {
@@ -55,7 +59,7 @@ impl<'a> Parser<'a> {
 
         while let Some(result) = self.lexer.next() {
             let statement = match result {
-                Ok(token) => self.parse_statement(token),
+                Ok(token) => self.pase_declaration(token),
                 Err(e) => {
                     let (line, col) = (e.line, e.column);
                     Err(ParserError::new(
@@ -71,17 +75,51 @@ impl<'a> Parser<'a> {
         Ok(program)
     }
 
+    fn pase_declaration(&mut self, token: Token) -> Result<Statement, ParserError> {
+        match &token.kind {
+            TokenType::Var => {
+                let identifier = self.advance_expecting(&token, TokenType::Identifier, |next| {
+                    ParserErrorType::IdentifierExpected {
+                        found: next.clone(),
+                    }
+                })?;
+
+                let next = self.advance(&identifier)?;
+
+                match &next.kind {
+                    TokenType::Semicolon => Ok(Statement::var_declaration(token, identifier, None)),
+                    TokenType::Equal => {
+                        let next = self.advance(&identifier)?;
+                        let expression = self.parse_expression(next)?;
+
+                        self.expect_semi(&expression.token)?;
+
+                        Ok(Statement::var_declaration(
+                            token,
+                            identifier,
+                            Some(expression),
+                        ))
+                    }
+                    _ => Err(ParserError::new(
+                        ParserErrorType::UnexpectedToken {
+                            token: next.lexeme.clone(),
+                        },
+                        next.line,
+                        next.column,
+                    )),
+                }
+            }
+            _ => self.parse_statement(token),
+        }
+    }
+
     fn parse_statement(&mut self, token: Token) -> Result<Statement, ParserError> {
         match &token.kind {
             TokenType::Print => {
-                let expr_token = self.advance(&token)?;
-                let expression = self.parse_expression(expr_token.clone())?;
+                let next = self.advance(&token)?;
+                let expression = self.parse_expression(next.clone())?;
 
-                self.advance_expecting(
-                    &expression.token,
-                    TokenType::Semicolon,
-                    ParserErrorType::MissingSemicolen,
-                )?;
+                self.expect_semi(&expression.token)?;
                 Ok(Statement::new(
                     token,
                     StatementType::Print { expr: expression },
@@ -168,11 +206,9 @@ impl<'a> Parser<'a> {
                 let next_token = self.advance(&token)?;
                 let inner = self.parse_expression(next_token)?;
 
-                self.advance_expecting(
-                    &inner.token,
-                    TokenType::RightParen,
-                    ParserErrorType::UnmatchedParenthesis,
-                )?;
+                self.advance_expecting(&inner.token, TokenType::RightParen, |_| {
+                    ParserErrorType::UnmatchedParenthesis
+                })?;
                 Ok(Expression::new(
                     token,
                     ExpressionType::Grouping {
@@ -190,6 +226,10 @@ impl<'a> Parser<'a> {
             TokenType::Number(n) => {
                 let n = *n;
                 Ok(Expression::literal(token, LiteralExpression::Number(n)))
+            }
+            TokenType::Identifier => {
+                let name = token.lexeme.clone();
+                Ok(Expression::new(token, ExpressionType::identifier(name)))
             }
             _ => Err(ParserError::new(
                 ParserErrorType::UnexpectedToken {
@@ -239,35 +279,40 @@ impl<'a> Parser<'a> {
     }
 
     fn advance(&mut self, prev_token: &Token) -> Result<Token, ParserError> {
-        self.advance_custom(prev_token, ParserErrorType::UnexpectedEof)
-    }
-
-    fn advance_expecting(
-        &mut self,
-        prev_token: &Token,
-        expected: TokenType,
-        error: ParserErrorType,
-    ) -> Result<Token, ParserError> {
-        let next = self.advance_custom(prev_token, error.clone())?;
-        if next.kind == expected {
-            Ok(next)
-        } else {
-            Err(ParserError::new(error, prev_token.line, prev_token.column))
-        }
-    }
-
-    fn advance_custom(
-        &mut self,
-        prev_token: &Token,
-        error: ParserErrorType,
-    ) -> Result<Token, ParserError> {
         match self.lexer.next() {
             Some(result) => result.map_err(|e| {
                 let (line, col) = (e.line, e.column);
                 ParserError::new(ParserErrorType::TokenError { error: e }, line, col)
             }),
-            None => Err(ParserError::new(error, prev_token.line, prev_token.column)),
+            None => Err(ParserError::new(
+                ParserErrorType::UnexpectedEof,
+                prev_token.line,
+                prev_token.column,
+            )),
         }
+    }
+
+    fn advance_expecting<F>(
+        &mut self,
+        prev_token: &Token,
+        expected: TokenType,
+        error: F,
+    ) -> Result<Token, ParserError>
+    where
+        F: FnOnce(&Token) -> ParserErrorType,
+    {
+        let next = self.advance(prev_token)?;
+        if next.kind == expected {
+            Ok(next)
+        } else {
+            Err(ParserError::new(error(&next), next.line, next.column))
+        }
+    }
+
+    fn expect_semi(&mut self, prev_token: &Token) -> Result<Token, ParserError> {
+        self.advance_expecting(prev_token, TokenType::Semicolon, |_| {
+            ParserErrorType::MissingSemicolen
+        })
     }
 }
 
@@ -317,6 +362,9 @@ pub enum ParserErrorType {
 
     #[error("{error}")]
     TokenError { error: TokenError },
+
+    #[error("Identifier expected. Foud: {:?}", found)]
+    IdentifierExpected { found: Token },
 
     #[error("Unexpected end of file")]
     UnexpectedEof,
@@ -420,6 +468,19 @@ mod tests {
             ("2 < 3 > 1", "(> (< 2.0 3.0) 1.0)"),
             ("1 + 2 == 3 > 0", "(== (+ 1.0 2.0) (> 3.0 0.0))"),
             ("2 * 3 > 5 == 1 < 4", "(== (> (* 2.0 3.0) 5.0) (< 1.0 4.0))"),
+        ];
+
+        for (input, expected) in tests {
+            assert_eq!(parse_program(input), expected, "Input: {}", input);
+        }
+    }
+
+    #[test]
+    fn parse_identifier_and_declaration() {
+        let tests = vec![
+            ("var name = \"John\";", "var name = John;"),
+            ("var Uninitialized;", "var Uninitialized;"),
+            ("variable + 23", "(+ variable 23.0)"),
         ];
 
         for (input, expected) in tests {

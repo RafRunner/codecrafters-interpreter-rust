@@ -44,6 +44,20 @@ impl Statement {
     pub fn new(token: Token, kind: StatementType) -> Self {
         Self { token, kind }
     }
+
+    pub fn var_declaration(var_token: Token, identifier: Token, value: Option<Expression>) -> Self {
+        Self::new(
+            var_token,
+            StatementType::Declaration {
+                stmt: DeclaraionStatement::VarDeclaration {
+                    identifier: IdentifierStruct {
+                        name: identifier.lexeme.clone(),
+                    },
+                    value,
+                },
+            },
+        )
+    }
 }
 
 impl Display for Statement {
@@ -51,6 +65,15 @@ impl Display for Statement {
         match &self.kind {
             StatementType::Expression { expr } => write!(f, "{}", expr),
             StatementType::Print { expr } => write!(f, "print {};", expr),
+            StatementType::Declaration { stmt } => match stmt {
+                DeclaraionStatement::VarDeclaration { identifier, value } => {
+                    if let Some(value) = value {
+                        write!(f, "var {} = {};", identifier.name, value)
+                    } else {
+                        write!(f, "var {};", identifier.name)
+                    }
+                }
+            },
         }
     }
 }
@@ -59,6 +82,7 @@ impl Display for Statement {
 pub enum StatementType {
     Expression { expr: Expression },
     Print { expr: Expression },
+    Declaration { stmt: DeclaraionStatement },
 }
 
 #[derive(Debug)]
@@ -88,8 +112,14 @@ impl Display for Expression {
                 rigth,
             } => write!(f, "({} {} {})", operator, left, rigth),
             ExpressionType::Grouping { expr } => write!(f, "(group {})", expr),
+            ExpressionType::Identifier(IdentifierStruct { name }) => write!(f, "{}", name),
         }
     }
+}
+
+#[derive(Debug)]
+pub struct IdentifierStruct {
+    pub name: String,
 }
 
 #[derive(Debug)]
@@ -109,6 +139,13 @@ pub enum ExpressionType {
     Grouping {
         expr: Box<Expression>,
     },
+    Identifier(IdentifierStruct),
+}
+
+impl ExpressionType {
+    pub fn identifier(name: String) -> Self {
+        Self::Identifier(IdentifierStruct { name })
+    }
 }
 
 #[derive(Debug)]
@@ -177,6 +214,15 @@ impl Display for BinaryOperator {
         }
     }
 }
+
+#[derive(Debug)]
+pub enum DeclaraionStatement {
+    VarDeclaration {
+        identifier: IdentifierStruct,
+        value: Option<Expression>,
+    },
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

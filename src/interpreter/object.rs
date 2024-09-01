@@ -1,6 +1,6 @@
 use std::fmt::{Display, Formatter};
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum Object {
     True,
     False,
@@ -16,6 +16,10 @@ impl Object {
         } else {
             Self::False
         }
+    }
+
+    pub fn is_truthy(&self) -> bool {
+        !matches!(self, Self::False | Self::Nil)
     }
 }
 
