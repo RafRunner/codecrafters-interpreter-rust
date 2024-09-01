@@ -43,13 +43,13 @@ fn main() {
             }
         }
         "parse" => {
-            let program = parse_program_or_exit(&file_contents);
+            let program = parse_program_or_exit(&file_contents, true);
             for stmt in program.statements {
                 println!("{}", stmt);
             }
         }
         "evaluate" | "run" => {
-            let program = parse_program_or_exit(&file_contents);
+            let program = parse_program_or_exit(&file_contents, command == "evaluate");
             let mut interpreter = Interpreter::new();
 
             match interpreter.evaluate(program) {
@@ -71,8 +71,8 @@ fn main() {
     }
 }
 
-fn parse_program_or_exit(input: &str) -> Program {
-    match parse_program(input) {
+fn parse_program_or_exit(input: &str, optional_semi_expressions: bool) -> Program {
+    match parse_program(input, optional_semi_expressions) {
         Ok(program) => program,
         Err(e) => {
             eprintln!("{}", e);

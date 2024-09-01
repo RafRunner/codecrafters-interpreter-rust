@@ -51,7 +51,7 @@ impl Statement {
             StatementType::Declaration {
                 stmt: DeclaraionStatement::VarDeclaration {
                     identifier: IdentifierStruct {
-                        name: identifier.lexeme.clone(),
+                        name: identifier.lexeme,
                     },
                     value,
                 },
@@ -113,6 +113,9 @@ impl Display for Expression {
             } => write!(f, "({} {} {})", operator, left, rigth),
             ExpressionType::Grouping { expr } => write!(f, "(group {})", expr),
             ExpressionType::Identifier(IdentifierStruct { name }) => write!(f, "{}", name),
+            ExpressionType::Assignment { kind, value } => match kind {
+                AssignmentKind::Variable { name } => write!(f, "{} = {}", name, value),
+            },
         }
     }
 }
@@ -120,6 +123,11 @@ impl Display for Expression {
 #[derive(Debug)]
 pub struct IdentifierStruct {
     pub name: String,
+}
+
+#[derive(Debug)]
+pub enum AssignmentKind {
+    Variable { name: String },
 }
 
 #[derive(Debug)]
@@ -140,6 +148,10 @@ pub enum ExpressionType {
         expr: Box<Expression>,
     },
     Identifier(IdentifierStruct),
+    Assignment {
+        kind: AssignmentKind,
+        value: Box<Expression>,
+    },
 }
 
 impl ExpressionType {

@@ -1,7 +1,8 @@
 use std::collections::HashMap;
 
 use crate::ast::{
-    BinaryOperator, DeclaraionStatement, Expression, ExpressionType, IdentifierStruct, LiteralExpression, Program, StatementType, UnaryOperator
+    AssignmentKind, BinaryOperator, DeclaraionStatement, Expression, ExpressionType,
+    IdentifierStruct, LiteralExpression, Program, StatementType, UnaryOperator,
 };
 use anyhow::{anyhow, Result};
 
@@ -9,13 +10,13 @@ use super::object::Object;
 
 pub struct Interpreter {
     // TODO just a temp env to pass the first stage
-    env: HashMap<String, Object>
+    env: HashMap<String, Object>,
 }
 
 impl Interpreter {
     pub fn new() -> Self {
         Self {
-            env: HashMap::new()
+            env: HashMap::new(),
         }
     }
 
@@ -32,19 +33,17 @@ impl Interpreter {
 
                     None
                 }
-                StatementType::Declaration { stmt } => {
-                    match stmt {
-                        DeclaraionStatement::VarDeclaration { identifier, value } => {
-                            let value = if let Some(expr) = value {
-                                self.execute_expression(expr)?
-                            } else {
-                                Object::Nil
-                            };
+                StatementType::Declaration { stmt } => match stmt {
+                    DeclaraionStatement::VarDeclaration { identifier, value } => {
+                        let value = if let Some(expr) = value {
+                            self.execute_expression(expr)?
+                        } else {
+                            Object::Nil
+                        };
 
-                            self.env.insert(identifier.name, value);
+                        self.env.insert(identifier.name, value);
 
-                            None
-                        },
+                        None
                     }
                 },
             };
@@ -128,8 +127,23 @@ impl Interpreter {
                 }
             }
             ExpressionType::Grouping { expr } => self.execute_expression(*expr),
-            ExpressionType::Identifier(IdentifierStruct { name }) => {
-                self.env.get(&name).cloned().ok_or(anyhow!("Undefined variable '{}'", name))
+            ExpressionType::Identifier(IdentifierStruct { name }) => self
+                .env
+                .get(&name)
+                .cloned()
+                .ok_or(anyhow!("Undefined variable '{}'", name)),
+            ExpressionType::Assignment { kind, value } => match kind {
+                AssignmentKind::Variable { name } => {
+                    if !self.env.contains_key(&name) {
+                        Err(anyhow!("Undefined variable '{}'", name))
+                    } else {
+                        let value = self.execute_expression(*value)?;
+
+                        self.env.insert(name, value);
+
+                        Ok(Object::Nil)
+                    }
+                }
             },
         }
     }
@@ -158,7 +172,7 @@ mod tests {
         ];
 
         for (input, expected) in tests {
-            let program = parse_program(input).unwrap();
+            let program = parse_program(input, true).unwrap();
             assert_eq!(evaluate(program).unwrap(), expected, "Input: {}", input);
         }
     }
@@ -175,7 +189,7 @@ mod tests {
         ];
 
         for (input, expected) in tests {
-            let program = parse_program(input).unwrap();
+            let program = parse_program(input, true).unwrap();
             assert_eq!(evaluate(program).unwrap(), expected, "Input: {}", input);
         }
     }
@@ -202,7 +216,7 @@ mod tests {
         ];
 
         for (input, expected) in tests {
-            let program = parse_program(input).unwrap();
+            let program = parse_program(input, true).unwrap();
             assert_eq!(evaluate(program).unwrap(), expected, "Input: {}", input);
         }
     }
@@ -218,7 +232,7 @@ mod tests {
         ];
 
         for (input, expected) in tests {
-            let program = parse_program(input).unwrap();
+            let program = parse_program(input, true).unwrap();
             assert_eq!(evaluate(program).unwrap(), expected, "Input: {}", input);
         }
     }
@@ -242,7 +256,7 @@ mod tests {
         ];
 
         for (input, expected_err) in tests {
-            let program = parse_program(input).unwrap();
+            let program = parse_program(input, true).unwrap();
             let result = evaluate(program);
             assert!(result.is_err(), "Expression {} should be an error", input);
             assert_eq!(

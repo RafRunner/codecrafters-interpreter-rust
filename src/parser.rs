@@ -5,14 +5,20 @@ use std::{
 };
 
 use crate::{
-    ast::{Expression, ExpressionType, LiteralExpression, Program, Statement, StatementType},
+    ast::{
+        AssignmentKind, Expression, ExpressionType, IdentifierStruct, LiteralExpression, Program,
+        Statement, StatementType,
+    },
     lexer::{Lexer, LexerIterator},
     token::{Token, TokenError, TokenType},
 };
 
-pub fn parse_program(input: &str) -> Result<Program, ParserError> {
+pub fn parse_program(
+    input: &str,
+    optional_semi_expressions: bool,
+) -> Result<Program, ParserOrTokenError> {
     let lexer = Lexer::new(input);
-    let mut parser = Parser::new(lexer);
+    let mut parser = Parser::new(lexer, optional_semi_expressions);
 
     parser.parse_program()
 }
@@ -28,11 +34,12 @@ pub fn parse_program(input: &str) -> Result<Program, ParserError> {
  *
  * statement      -> exprStmt
  *                 | printStmt ;
- * // the '?' is a deviation from the book to apeasse codecrafters tests without many hacks
- * exprStmt       -> expression ";"? ;
+ * exprStmt       -> expression ";" ;
  * printStmt      -> "print" expression ";" ;
  *
- * expression     -> equality
+ * expression     -> assignment
+ * assignment     -> IDENTIFIER "=" assignment
+ *                 | equality ;
  * equality       -> comparison ( ( "!=" | "==" ) comparison )* ;
  * comparison     -> term ( ( ">" | ">=" | "<" | "<=" ) term )* ;
  * term           -> factor ( ( "-" | "+" ) factor )* ;
@@ -45,37 +52,31 @@ pub fn parse_program(input: &str) -> Result<Program, ParserError> {
 
 pub struct Parser<'a> {
     lexer: Peekable<LexerIterator<'a>>,
+    optional_semi_expressions: bool,
 }
 
 impl<'a> Parser<'a> {
-    pub fn new(lexer: Lexer<'a>) -> Self {
+    pub fn new(lexer: Lexer<'a>, optional_semi_expressions: bool) -> Self {
         Self {
             lexer: lexer.iter().peekable(),
+            optional_semi_expressions,
         }
     }
 
-    pub fn parse_program(&mut self) -> Result<Program, ParserError> {
+    pub fn parse_program(&mut self) -> Result<Program, ParserOrTokenError> {
         let mut program = Program::new();
 
         while let Some(result) = self.lexer.next() {
-            let statement = match result {
-                Ok(token) => self.pase_declaration(token),
-                Err(e) => {
-                    let (line, col) = (e.line, e.column);
-                    Err(ParserError::new(
-                        ParserErrorType::TokenError { error: e },
-                        line,
-                        col,
-                    ))
-                }
-            }?;
+            let token = result?;
+            let statement = self.pase_declaration(token)?;
+
             program.statements.push(statement);
         }
 
         Ok(program)
     }
 
-    fn pase_declaration(&mut self, token: Token) -> Result<Statement, ParserError> {
+    fn pase_declaration(&mut self, token: Token) -> Result<Statement, ParserOrTokenError> {
         match &token.kind {
             TokenType::Var => {
                 let identifier = self.advance_expecting(&token, TokenType::Identifier, |next| {
@@ -100,20 +101,19 @@ impl<'a> Parser<'a> {
                             Some(expression),
                         ))
                     }
-                    _ => Err(ParserError::new(
+                    _ => Err(ParserOrTokenError::Parser(ParserError::new(
                         ParserErrorType::UnexpectedToken {
                             token: next.lexeme.clone(),
                         },
-                        next.line,
-                        next.column,
-                    )),
+                        next,
+                    ))),
                 }
             }
             _ => self.parse_statement(token),
         }
     }
 
-    fn parse_statement(&mut self, token: Token) -> Result<Statement, ParserError> {
+    fn parse_statement(&mut self, token: Token) -> Result<Statement, ParserOrTokenError> {
         match &token.kind {
             TokenType::Print => {
                 let next = self.advance(&token)?;
@@ -131,6 +131,11 @@ impl<'a> Parser<'a> {
                 if let Some(Ok(next)) = self.lexer.peek() {
                     if next.kind == TokenType::Semicolon {
                         self.lexer.next();
+                    } else if !self.optional_semi_expressions {
+                        return Err(ParserOrTokenError::Parser(ParserError::new(
+                            ParserErrorType::MissingSemicolen,
+                            expression.token,
+                        )));
                     }
                 }
                 Ok(Statement::new(
@@ -141,11 +146,41 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn parse_expression(&mut self, token: Token) -> Result<Expression, ParserError> {
-        self.parse_equality(token.clone())
+    fn parse_expression(&mut self, token: Token) -> Result<Expression, ParserOrTokenError> {
+        self.parse_assignment(token)
     }
 
-    fn parse_equality(&mut self, token: Token) -> Result<Expression, ParserError> {
+    fn parse_assignment(&mut self, token: Token) -> Result<Expression, ParserOrTokenError> {
+        let left = self.parse_equality(token)?;
+
+        if let Some(Ok(next)) = self.lexer.peek() {
+            if next.kind == TokenType::Equal {
+                let equals = next.clone();
+                self.lexer.next();
+                let next = self.advance(&equals)?;
+
+                let rigth = self.parse_assignment(next)?;
+
+                return match left.kind {
+                    ExpressionType::Identifier(IdentifierStruct { name }) => Ok(Expression::new(
+                        equals,
+                        ExpressionType::Assignment {
+                            kind: AssignmentKind::Variable { name },
+                            value: Box::new(rigth),
+                        },
+                    )),
+                    _ => Err(ParserOrTokenError::Parser(ParserError::new(
+                        ParserErrorType::InvalidAssignmentTarget,
+                        equals,
+                    ))),
+                };
+            }
+        }
+
+        Ok(left)
+    }
+
+    fn parse_equality(&mut self, token: Token) -> Result<Expression, ParserOrTokenError> {
         self.parse_binary_operation(
             token,
             Self::parse_comparison,
@@ -153,7 +188,7 @@ impl<'a> Parser<'a> {
         )
     }
 
-    fn parse_comparison(&mut self, token: Token) -> Result<Expression, ParserError> {
+    fn parse_comparison(&mut self, token: Token) -> Result<Expression, ParserOrTokenError> {
         self.parse_binary_operation(
             token,
             Self::parse_term,
@@ -166,7 +201,7 @@ impl<'a> Parser<'a> {
         )
     }
 
-    fn parse_term(&mut self, token: Token) -> Result<Expression, ParserError> {
+    fn parse_term(&mut self, token: Token) -> Result<Expression, ParserOrTokenError> {
         self.parse_binary_operation(
             token,
             Self::parse_factor,
@@ -174,7 +209,7 @@ impl<'a> Parser<'a> {
         )
     }
 
-    fn parse_factor(&mut self, token: Token) -> Result<Expression, ParserError> {
+    fn parse_factor(&mut self, token: Token) -> Result<Expression, ParserOrTokenError> {
         self.parse_binary_operation(
             token,
             Self::parse_unary,
@@ -182,7 +217,7 @@ impl<'a> Parser<'a> {
         )
     }
 
-    fn parse_unary(&mut self, token: Token) -> Result<Expression, ParserError> {
+    fn parse_unary(&mut self, token: Token) -> Result<Expression, ParserOrTokenError> {
         if matches!(token.kind, TokenType::Bang | TokenType::Minus) {
             let operator = token.kind.props().2.unwrap();
             let next_token = self.advance(&token)?;
@@ -200,7 +235,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn parse_primary(&mut self, token: Token) -> Result<Expression, ParserError> {
+    fn parse_primary(&mut self, token: Token) -> Result<Expression, ParserOrTokenError> {
         match &token.kind {
             TokenType::LeftParen => {
                 let next_token = self.advance(&token)?;
@@ -231,13 +266,12 @@ impl<'a> Parser<'a> {
                 let name = token.lexeme.clone();
                 Ok(Expression::new(token, ExpressionType::identifier(name)))
             }
-            _ => Err(ParserError::new(
+            _ => Err(ParserOrTokenError::Parser(ParserError::new(
                 ParserErrorType::UnexpectedToken {
-                    token: token.lexeme,
+                    token: token.lexeme.clone(),
                 },
-                token.line,
-                token.column,
-            )),
+                token,
+            ))),
         }
     }
 
@@ -248,9 +282,9 @@ impl<'a> Parser<'a> {
         token: Token,
         parse_lower: F,
         operators: &[TokenType],
-    ) -> Result<Expression, ParserError>
+    ) -> Result<Expression, ParserOrTokenError>
     where
-        F: Fn(&mut Self, Token) -> Result<Expression, ParserError>,
+        F: Fn(&mut Self, Token) -> Result<Expression, ParserOrTokenError>,
     {
         let mut left = parse_lower(self, token)?;
 
@@ -278,17 +312,13 @@ impl<'a> Parser<'a> {
         Ok(left)
     }
 
-    fn advance(&mut self, prev_token: &Token) -> Result<Token, ParserError> {
+    fn advance(&mut self, prev_token: &Token) -> Result<Token, ParserOrTokenError> {
         match self.lexer.next() {
-            Some(result) => result.map_err(|e| {
-                let (line, col) = (e.line, e.column);
-                ParserError::new(ParserErrorType::TokenError { error: e }, line, col)
-            }),
-            None => Err(ParserError::new(
+            Some(result) => result.map_err(|e| ParserOrTokenError::Token(e)),
+            None => Err(ParserOrTokenError::Parser(ParserError::new(
                 ParserErrorType::UnexpectedEof,
-                prev_token.line,
-                prev_token.column,
-            )),
+                prev_token.clone(),
+            ))),
         }
     }
 
@@ -297,7 +327,7 @@ impl<'a> Parser<'a> {
         prev_token: &Token,
         expected: TokenType,
         error: F,
-    ) -> Result<Token, ParserError>
+    ) -> Result<Token, ParserOrTokenError>
     where
         F: FnOnce(&Token) -> ParserErrorType,
     {
@@ -305,41 +335,48 @@ impl<'a> Parser<'a> {
         if next.kind == expected {
             Ok(next)
         } else {
-            Err(ParserError::new(error(&next), next.line, next.column))
+            Err(ParserOrTokenError::Parser(ParserError::new(
+                error(&next),
+                next.clone(),
+            )))
         }
     }
 
-    fn expect_semi(&mut self, prev_token: &Token) -> Result<Token, ParserError> {
+    fn expect_semi(&mut self, prev_token: &Token) -> Result<Token, ParserOrTokenError> {
         self.advance_expecting(prev_token, TokenType::Semicolon, |_| {
             ParserErrorType::MissingSemicolen
         })
     }
 }
 
+#[derive(Debug, thiserror::Error)]
+pub enum ParserOrTokenError {
+    #[error("{0}")]
+    Parser(#[from] ParserError),
+
+    #[error("{0}")]
+    Token(#[from] TokenError),
+}
+
 #[derive(Debug, PartialEq, Clone)]
 pub struct ParserError {
     pub error: ParserErrorType,
-    pub line: usize,
-    pub column: usize,
+    pub token: Token,
 }
 
 impl ParserError {
-    pub fn new(error: ParserErrorType, line: usize, column: usize) -> Self {
-        Self {
-            error,
-            line,
-            column,
-        }
+    pub fn new(error: ParserErrorType, token: Token) -> Self {
+        Self { error, token }
     }
 }
 
 impl Display for ParserError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        if let ParserErrorType::TokenError { error } = &self.error {
-            write!(f, "{}", error)
-        } else {
-            write!(f, "[line {}] Error: {}", self.line, self.error)
-        }
+        write!(
+            f,
+            "[line {}] Error at '{}': {}",
+            self.token.line, self.token.lexeme, self.error
+        )
     }
 }
 
@@ -360,11 +397,11 @@ pub enum ParserErrorType {
     #[error("Missing ';'")]
     MissingSemicolen,
 
-    #[error("{error}")]
-    TokenError { error: TokenError },
-
     #[error("Identifier expected. Foud: {:?}", found)]
     IdentifierExpected { found: Token },
+
+    #[error("Invalid assignment target.")]
+    InvalidAssignmentTarget,
 
     #[error("Unexpected end of file")]
     UnexpectedEof,
@@ -374,7 +411,7 @@ pub enum ParserErrorType {
 mod tests {
 
     fn parse_program(input: &str) -> String {
-        let program = super::parse_program(input).expect("Program did not parse correctly");
+        let program = super::parse_program(input, true).expect("Program did not parse correctly");
 
         program.to_string()
     }
