@@ -139,9 +139,9 @@ impl Interpreter {
                     } else {
                         let value = self.execute_expression(*value)?;
 
-                        self.env.insert(name, value);
+                        self.env.insert(name, value.clone());
 
-                        Ok(Object::Nil)
+                        Ok(value)
                     }
                 }
             },
