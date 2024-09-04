@@ -14,13 +14,9 @@ impl Env {
     }
 
     pub fn get_symbol(&mut self, identifier: &str) -> Option<&mut Symbol> {
-        if let Some(parent) = self.parent.as_mut() {
-            if let Some(value) = parent.get_symbol(identifier) {
-                return Some(value);
-            }
-        }
-
-        self.symbols.get_mut(identifier)
+        self.symbols
+            .get_mut(identifier)
+            .or_else(|| self.parent.as_mut()?.get_symbol(identifier))
     }
 
     pub fn insert_symbol(&mut self, identifier: String, symbol: Symbol) {
