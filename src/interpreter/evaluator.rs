@@ -1,23 +1,23 @@
-use std::collections::HashMap;
-
 use crate::ast::{
     AssignmentKind, BinaryOperator, DeclaraionStatement, Expression, ExpressionType,
     IdentifierStruct, LiteralExpression, Program, Statement, StatementType, UnaryOperator,
 };
 use anyhow::{anyhow, Result};
 
-use super::object::Object;
+use super::{
+    env::{Env, Symbol},
+    object::Object,
+};
 
+#[derive(Debug, Default)]
 pub struct Interpreter {
     // TODO just a temp env to pass the first stage
-    env: HashMap<String, Object>,
+    env: Env,
 }
 
 impl Interpreter {
     pub fn new() -> Self {
-        Self {
-            env: HashMap::new(),
-        }
+        Self::default()
     }
 
     pub fn evaluate(&mut self, program: Program) -> Result<Option<Object>> {
@@ -45,12 +45,18 @@ impl Interpreter {
                             Object::Nil
                         };
 
-                        self.env.insert(identifier.name, value);
+                        self.env
+                            .insert_symbol(identifier.name, Symbol::Variable(value));
 
                         None
                     }
                 },
-                StatementType::Block { stmts } => self.evaluate_statements(stmts)?,
+                StatementType::Block { stmts } => {
+                    self.env.enter_scope();
+                    let result = self.evaluate_statements(stmts);
+                    self.env.exit_scope();
+                    result?
+                }
             };
         }
 
@@ -132,23 +138,23 @@ impl Interpreter {
                 }
             }
             ExpressionType::Grouping { expr } => self.execute_expression(*expr),
-            ExpressionType::Identifier(IdentifierStruct { name }) => self
-                .env
-                .get(&name)
-                .cloned()
-                .ok_or(anyhow!("Undefined variable '{}'", name)),
+            ExpressionType::Identifier(IdentifierStruct { name }) => {
+                match self.env.get_symbol(&name) {
+                    Some(Symbol::Variable(var)) => Ok(var.clone()),
+                    None => Err(anyhow!("Undefined variable '{}'", name)),
+                }
+            }
             ExpressionType::Assignment { kind, value } => match kind {
-                AssignmentKind::Variable { name } => {
-                    if !self.env.contains_key(&name) {
-                        Err(anyhow!("Undefined variable '{}'", name))
-                    } else {
+                AssignmentKind::Variable { name } => match self.env.get_symbol(&name) {
+                    Some(Symbol::Variable(_)) => {
                         let value = self.execute_expression(*value)?;
 
-                        self.env.insert(name, value.clone());
+                        *self.env.get_symbol(&name).unwrap() = Symbol::Variable(value.clone());
 
                         Ok(value)
                     }
-                }
+                    None => Err(anyhow!("Undefined variable '{}'", name)),
+                },
             },
         }
     }

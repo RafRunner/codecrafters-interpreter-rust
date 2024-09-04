@@ -75,7 +75,7 @@ impl Display for Statement {
                 }
             },
             StatementType::Block { stmts } => {
-                write!(f, "{{\n")?;
+                writeln!(f, "{{")?;
 
                 write!(
                     f,

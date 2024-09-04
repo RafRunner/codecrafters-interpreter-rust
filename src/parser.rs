@@ -350,7 +350,7 @@ impl<'a> Parser<'a> {
 
     fn advance(&mut self, prev_token: &Token) -> Result<Token, ParserOrTokenError> {
         match self.lexer.next() {
-            Some(result) => result.map_err(|e| ParserOrTokenError::Token(e)),
+            Some(result) => result.map_err(ParserOrTokenError::Token),
             None => Err(ParserOrTokenError::Parser(ParserError::new(
                 ParserErrorType::UnexpectedEof,
                 prev_token.clone(),

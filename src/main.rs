@@ -9,7 +9,10 @@ use interpreter_starter_rust::parser::parse_program;
 fn main() {
     let args: Vec<String> = env::args().collect();
     if args.len() < 3 {
-        eprintln!("Usage: {} tokenize <filename>", args[0]);
+        eprintln!(
+            "Usage: {} [tokenize | parse | evaluate | run] <filename>",
+            args[0]
+        );
         return;
     }
 
