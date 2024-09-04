@@ -74,6 +74,21 @@ impl Display for Statement {
                     }
                 }
             },
+            StatementType::Block { stmts } => {
+                write!(f, "{{\n")?;
+
+                write!(
+                    f,
+                    "{}",
+                    stmts
+                        .iter()
+                        .map(|s| s.to_string())
+                        .collect::<Vec<_>>()
+                        .join("\n")
+                )?;
+
+                write!(f, "\n}}")
+            }
         }
     }
 }
@@ -83,6 +98,7 @@ pub enum StatementType {
     Expression { expr: Expression },
     Print { expr: Expression },
     Declaration { stmt: DeclaraionStatement },
+    Block { stmts: Vec<Statement> },
 }
 
 #[derive(Debug)]

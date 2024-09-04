@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::ast::{
     AssignmentKind, BinaryOperator, DeclaraionStatement, Expression, ExpressionType,
-    IdentifierStruct, LiteralExpression, Program, StatementType, UnaryOperator,
+    IdentifierStruct, LiteralExpression, Program, Statement, StatementType, UnaryOperator,
 };
 use anyhow::{anyhow, Result};
 
@@ -21,9 +21,13 @@ impl Interpreter {
     }
 
     pub fn evaluate(&mut self, program: Program) -> Result<Option<Object>> {
+        self.evaluate_statements(program.statements)
+    }
+
+    fn evaluate_statements(&mut self, statements: Vec<Statement>) -> Result<Option<Object>> {
         let mut output = None;
 
-        for stmt in program.statements {
+        for stmt in statements {
             output = match stmt.kind {
                 StatementType::Expression { expr } => Some(self.execute_expression(expr)?),
                 StatementType::Print { expr } => {
@@ -46,13 +50,14 @@ impl Interpreter {
                         None
                     }
                 },
+                StatementType::Block { stmts } => self.evaluate_statements(stmts)?,
             };
         }
 
         Ok(output)
     }
 
-    pub fn execute_expression(&mut self, expression: Expression) -> Result<Object> {
+    fn execute_expression(&mut self, expression: Expression) -> Result<Object> {
         match expression.kind {
             ExpressionType::Literal { literal } => match literal {
                 LiteralExpression::Number(literal) => Ok(Object::Number(literal)),

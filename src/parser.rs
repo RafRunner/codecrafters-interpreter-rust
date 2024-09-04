@@ -33,9 +33,11 @@ pub fn parse_program(
  * varDecl        -> "var" IDENTIFIER ( "=" expression )? ";" ;
  *
  * statement      -> exprStmt
- *                 | printStmt ;
+ *                 | printStmt
+ *                 | blockStmt ;
  * exprStmt       -> expression ";" ;
  * printStmt      -> "print" expression ";" ;
+ * blockStmt      -> "{" declaration* "}" ;
  *
  * expression     -> assignment
  * assignment     -> IDENTIFIER "=" assignment
@@ -68,7 +70,7 @@ impl<'a> Parser<'a> {
 
         while let Some(result) = self.lexer.next() {
             let token = result?;
-            let statement = self.pase_declaration(token)?;
+            let statement = self.parse_declaration(token)?;
 
             program.statements.push(statement);
         }
@@ -76,74 +78,108 @@ impl<'a> Parser<'a> {
         Ok(program)
     }
 
-    fn pase_declaration(&mut self, token: Token) -> Result<Statement, ParserOrTokenError> {
+    fn parse_declaration(&mut self, token: Token) -> Result<Statement, ParserOrTokenError> {
         match &token.kind {
-            TokenType::Var => {
-                let identifier = self.advance_expecting(&token, TokenType::Identifier, |next| {
-                    ParserErrorType::IdentifierExpected {
-                        found: next.clone(),
-                    }
-                })?;
-
-                let next = self.advance(&identifier)?;
-
-                match &next.kind {
-                    TokenType::Semicolon => Ok(Statement::var_declaration(token, identifier, None)),
-                    TokenType::Equal => {
-                        let next = self.advance(&identifier)?;
-                        let expression = self.parse_expression(next)?;
-
-                        self.expect_semi(&expression.token)?;
-
-                        Ok(Statement::var_declaration(
-                            token,
-                            identifier,
-                            Some(expression),
-                        ))
-                    }
-                    _ => Err(ParserOrTokenError::Parser(ParserError::new(
-                        ParserErrorType::UnexpectedToken {
-                            token: next.lexeme.clone(),
-                        },
-                        next,
-                    ))),
-                }
-            }
+            TokenType::Var => self.parse_variable_statement(token),
             _ => self.parse_statement(token),
+        }
+    }
+
+    fn parse_variable_statement(&mut self, token: Token) -> Result<Statement, ParserOrTokenError> {
+        let identifier = self.advance_expecting(&token, TokenType::Identifier, |next| {
+            ParserErrorType::IdentifierExpected {
+                found: next.clone(),
+            }
+        })?;
+
+        let next = self.advance(&identifier)?;
+
+        match &next.kind {
+            TokenType::Semicolon => Ok(Statement::var_declaration(token, identifier, None)),
+            TokenType::Equal => {
+                let next = self.advance(&identifier)?;
+                let expression = self.parse_expression(next)?;
+
+                self.expect_semi(&expression.token)?;
+
+                Ok(Statement::var_declaration(
+                    token,
+                    identifier,
+                    Some(expression),
+                ))
+            }
+            _ => Err(ParserOrTokenError::Parser(ParserError::new(
+                ParserErrorType::UnexpectedToken {
+                    token: next.lexeme.clone(),
+                },
+                next,
+            ))),
         }
     }
 
     fn parse_statement(&mut self, token: Token) -> Result<Statement, ParserOrTokenError> {
         match &token.kind {
-            TokenType::Print => {
-                let next = self.advance(&token)?;
-                let expression = self.parse_expression(next.clone())?;
+            TokenType::Print => self.parse_print_statement(token),
+            TokenType::LeftBrace => self.parse_block_statement(token),
+            _ => self.parse_expression_statement(token),
+        }
+    }
 
-                self.expect_semi(&expression.token)?;
-                Ok(Statement::new(
-                    token,
-                    StatementType::Print { expr: expression },
-                ))
+    fn parse_print_statement(&mut self, token: Token) -> Result<Statement, ParserOrTokenError> {
+        let next = self.advance(&token)?;
+        let expression = self.parse_expression(next.clone())?;
+
+        self.expect_semi(&expression.token)?;
+        Ok(Statement::new(
+            token,
+            StatementType::Print { expr: expression },
+        ))
+    }
+
+    fn parse_block_statement(&mut self, token: Token) -> Result<Statement, ParserOrTokenError> {
+        let mut last_token = None;
+        let mut stmts = Vec::new();
+
+        while let Some(next) = self.lexer.next() {
+            let next = next?;
+            last_token = Some(next.clone());
+            if next.kind == TokenType::RightBrace {
+                break;
             }
-            _ => {
-                let expression = self.parse_expression(token.clone())?;
+            let stmt = self.parse_declaration(next.clone())?;
+            stmts.push(stmt);
+        }
 
-                if let Some(Ok(next)) = self.lexer.peek() {
-                    if next.kind == TokenType::Semicolon {
-                        self.lexer.next();
-                    } else if !self.optional_semi_expressions {
-                        return Err(ParserOrTokenError::Parser(ParserError::new(
-                            ParserErrorType::MissingSemicolen,
-                            expression.token,
-                        )));
-                    }
-                }
-                Ok(Statement::new(
-                    token,
-                    StatementType::Expression { expr: expression },
-                ))
+        if last_token.map_or(true, |tok| tok.kind != TokenType::RightBrace) {
+            return Err(ParserOrTokenError::Parser(ParserError::new(
+                ParserErrorType::BlockNotClosed,
+                token,
+            )));
+        }
+
+        Ok(Statement::new(token, StatementType::Block { stmts }))
+    }
+
+    fn parse_expression_statement(
+        &mut self,
+        token: Token,
+    ) -> Result<Statement, ParserOrTokenError> {
+        let expression = self.parse_expression(token.clone())?;
+
+        if let Some(Ok(next)) = self.lexer.peek() {
+            if next.kind == TokenType::Semicolon {
+                self.lexer.next();
+            } else if !self.optional_semi_expressions {
+                return Err(ParserOrTokenError::Parser(ParserError::new(
+                    ParserErrorType::MissingSemicolen,
+                    expression.token,
+                )));
             }
         }
+        Ok(Statement::new(
+            token,
+            StatementType::Expression { expr: expression },
+        ))
     }
 
     fn parse_expression(&mut self, token: Token) -> Result<Expression, ParserOrTokenError> {
@@ -403,6 +439,9 @@ pub enum ParserErrorType {
     #[error("Invalid assignment target.")]
     InvalidAssignmentTarget,
 
+    #[error("Block not closed.")]
+    BlockNotClosed,
+
     #[error("Unexpected end of file")]
     UnexpectedEof,
 }
@@ -518,6 +557,19 @@ mod tests {
             ("var name = \"John\";", "var name = John;"),
             ("var Uninitialized;", "var Uninitialized;"),
             ("variable + 23", "(+ variable 23.0)"),
+        ];
+
+        for (input, expected) in tests {
+            assert_eq!(parse_program(input), expected, "Input: {}", input);
+        }
+    }
+
+    #[test]
+    fn parse_block() {
+        let tests = vec![
+            ("{}", "{\n\n}"),
+            ("{ 1 + 2; }", "{\n(+ 1.0 2.0)\n}"),
+            ("{ 2 * 4; 43 /32; }", "{\n(* 2.0 4.0)\n(/ 43.0 32.0)\n}"),
         ];
 
         for (input, expected) in tests {
