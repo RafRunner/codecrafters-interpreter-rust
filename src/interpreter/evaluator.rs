@@ -28,39 +28,57 @@ impl Interpreter {
         let mut output = None;
 
         for stmt in statements {
-            output = match stmt.kind {
-                StatementType::Expression { expr } => Some(self.execute_expression(expr)?),
-                StatementType::Print { expr } => {
-                    let to_print = self.execute_expression(expr)?;
-
-                    println!("{}", to_print);
-
-                    None
-                }
-                StatementType::Declaration { stmt } => match stmt {
-                    DeclaraionStatement::VarDeclaration { identifier, value } => {
-                        let value = if let Some(expr) = value {
-                            self.execute_expression(expr)?
-                        } else {
-                            Object::Nil
-                        };
-
-                        self.env
-                            .insert_symbol(identifier.name, Symbol::Variable(value));
-
-                        None
-                    }
-                },
-                StatementType::Block { stmts } => {
-                    self.env.enter_scope();
-                    let result = self.evaluate_statements(stmts);
-                    self.env.exit_scope();
-                    result?
-                }
-            };
+            output = self.execute_statement(stmt)?;
         }
 
         Ok(output)
+    }
+
+    fn execute_statement(&mut self, stmt: Statement) -> Result<Option<Object>> {
+        Ok(match stmt.kind {
+            StatementType::Expression { expr } => Some(self.execute_expression(expr)?),
+            StatementType::Print { expr } => {
+                let to_print = self.execute_expression(expr)?;
+
+                println!("{}", to_print);
+
+                None
+            }
+            StatementType::Declaration { stmt } => match stmt {
+                DeclaraionStatement::VarDeclaration { identifier, value } => {
+                    let value = if let Some(expr) = value {
+                        self.execute_expression(expr)?
+                    } else {
+                        Object::Nil
+                    };
+
+                    self.env
+                        .insert_symbol(identifier.name, Symbol::Variable(value));
+
+                    None
+                }
+            },
+            StatementType::Block { stmts } => {
+                self.env.enter_scope();
+                let result = self.evaluate_statements(stmts);
+                self.env.exit_scope();
+                result?
+            }
+            StatementType::IfStatement {
+                condition,
+                then,
+                else_block,
+            } => {
+                let result = self.execute_expression(condition)?;
+                if result.is_truthy() {
+                    return self.execute_statement(*then);
+                } else if let Some(else_block) = else_block {
+                    return self.execute_statement(*else_block);
+                }
+
+                None
+            }
+        })
     }
 
     fn execute_expression(&mut self, expression: Expression) -> Result<Object> {

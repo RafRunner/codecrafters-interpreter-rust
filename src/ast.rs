@@ -75,19 +75,27 @@ impl Display for Statement {
                 }
             },
             StatementType::Block { stmts } => {
-                writeln!(f, "{{")?;
-
-                write!(
+                writeln!(
                     f,
-                    "{}",
+                    "{{{}}}",
                     stmts
                         .iter()
                         .map(|s| s.to_string())
                         .collect::<Vec<_>>()
                         .join("\n")
-                )?;
+                )
+            }
+            StatementType::IfStatement {
+                condition,
+                then,
+                else_block,
+            } => {
+                write!(f, "if ({})\n{}", condition, then)?;
+                if let Some(else_block) = else_block {
+                    writeln!(f, "else\n{}", else_block)?;
+                }
 
-                write!(f, "\n}}")
+                Ok(())
             }
         }
     }
@@ -95,10 +103,23 @@ impl Display for Statement {
 
 #[derive(Debug)]
 pub enum StatementType {
-    Expression { expr: Expression },
-    Print { expr: Expression },
-    Declaration { stmt: DeclaraionStatement },
-    Block { stmts: Vec<Statement> },
+    Expression {
+        expr: Expression,
+    },
+    Print {
+        expr: Expression,
+    },
+    Declaration {
+        stmt: DeclaraionStatement,
+    },
+    Block {
+        stmts: Vec<Statement>,
+    },
+    IfStatement {
+        condition: Expression,
+        then: Box<Statement>,
+        else_block: Option<Box<Statement>>,
+    },
 }
 
 #[derive(Debug)]

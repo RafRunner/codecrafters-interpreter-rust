@@ -13,6 +13,7 @@ use crate::{
     token::{Token, TokenError, TokenType},
 };
 
+#[allow(clippy::result_large_err)]
 pub fn parse_program(
     input: &str,
     optional_semi_expressions: bool,
@@ -33,9 +34,12 @@ pub fn parse_program(
  * varDecl        -> "var" IDENTIFIER ( "=" expression )? ";" ;
  *
  * statement      -> exprStmt
+ *                 | ifStmt
  *                 | printStmt
  *                 | blockStmt ;
  * exprStmt       -> expression ";" ;
+ * ifStmt         -> "if" "(" expression ")" statement
+ *                   ( "else" expression)? ;
  * printStmt      -> "print" expression ";" ;
  * blockStmt      -> "{" declaration* "}" ;
  *
@@ -65,6 +69,7 @@ impl<'a> Parser<'a> {
         }
     }
 
+    #[allow(clippy::result_large_err)]
     pub fn parse_program(&mut self) -> Result<Program, ParserOrTokenError> {
         let mut program = Program::new();
 
@@ -78,6 +83,7 @@ impl<'a> Parser<'a> {
         Ok(program)
     }
 
+    #[allow(clippy::result_large_err)]
     fn parse_declaration(&mut self, token: Token) -> Result<Statement, ParserOrTokenError> {
         match &token.kind {
             TokenType::Var => self.parse_variable_statement(token),
@@ -85,6 +91,7 @@ impl<'a> Parser<'a> {
         }
     }
 
+    #[allow(clippy::result_large_err)]
     fn parse_variable_statement(&mut self, token: Token) -> Result<Statement, ParserOrTokenError> {
         let identifier = self.advance_expecting(&token, TokenType::Identifier, |next| {
             ParserErrorType::IdentifierExpected {
@@ -117,14 +124,17 @@ impl<'a> Parser<'a> {
         }
     }
 
+    #[allow(clippy::result_large_err)]
     fn parse_statement(&mut self, token: Token) -> Result<Statement, ParserOrTokenError> {
         match &token.kind {
             TokenType::Print => self.parse_print_statement(token),
             TokenType::LeftBrace => self.parse_block_statement(token),
+            TokenType::If => self.parse_if_statement(token),
             _ => self.parse_expression_statement(token),
         }
     }
 
+    #[allow(clippy::result_large_err)]
     fn parse_print_statement(&mut self, token: Token) -> Result<Statement, ParserOrTokenError> {
         let next = self.advance(&token)?;
         let expression = self.parse_expression(next.clone())?;
@@ -136,6 +146,7 @@ impl<'a> Parser<'a> {
         ))
     }
 
+    #[allow(clippy::result_large_err)]
     fn parse_block_statement(&mut self, token: Token) -> Result<Statement, ParserOrTokenError> {
         let mut last_token = None;
         let mut stmts = Vec::new();
@@ -160,6 +171,49 @@ impl<'a> Parser<'a> {
         Ok(Statement::new(token, StatementType::Block { stmts }))
     }
 
+    #[allow(clippy::result_large_err)]
+    fn parse_if_statement(&mut self, token: Token) -> Result<Statement, ParserOrTokenError> {
+        let left_paren = self.advance_expecting_dft(&token, TokenType::LeftParen)?;
+        let next = self.advance(&left_paren)?;
+        let condition = self.parse_expression(next)?;
+        self.advance_expecting_dft(&condition.token, TokenType::RightParen)?;
+
+        let next = self.advance(&left_paren)?;
+        let then = self.parse_statement(next)?;
+
+        let else_block = if let Some(Ok(next)) = self.lexer.peek() {
+            if next.kind == TokenType::Else {
+                // consume the else
+                let else_tok = self.lexer.next().unwrap().unwrap();
+
+                if self.lexer.peek().is_none() {
+                    return Err(ParserOrTokenError::Parser(ParserError::new(
+                        ParserErrorType::UnexpectedEof,
+                        else_tok,
+                    )));
+                }
+
+                let next = self.lexer.next().unwrap().unwrap();
+                let block = self.parse_statement(next)?;
+                Some(Box::new(block))
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
+        Ok(Statement::new(
+            token,
+            StatementType::IfStatement {
+                condition,
+                then: Box::new(then),
+                else_block,
+            },
+        ))
+    }
+
+    #[allow(clippy::result_large_err)]
     fn parse_expression_statement(
         &mut self,
         token: Token,
@@ -182,10 +236,12 @@ impl<'a> Parser<'a> {
         ))
     }
 
+    #[allow(clippy::result_large_err)]
     fn parse_expression(&mut self, token: Token) -> Result<Expression, ParserOrTokenError> {
         self.parse_assignment(token)
     }
 
+    #[allow(clippy::result_large_err)]
     fn parse_assignment(&mut self, token: Token) -> Result<Expression, ParserOrTokenError> {
         let left = self.parse_equality(token)?;
 
@@ -216,6 +272,7 @@ impl<'a> Parser<'a> {
         Ok(left)
     }
 
+    #[allow(clippy::result_large_err)]
     fn parse_equality(&mut self, token: Token) -> Result<Expression, ParserOrTokenError> {
         self.parse_binary_operation(
             token,
@@ -224,6 +281,7 @@ impl<'a> Parser<'a> {
         )
     }
 
+    #[allow(clippy::result_large_err)]
     fn parse_comparison(&mut self, token: Token) -> Result<Expression, ParserOrTokenError> {
         self.parse_binary_operation(
             token,
@@ -237,6 +295,7 @@ impl<'a> Parser<'a> {
         )
     }
 
+    #[allow(clippy::result_large_err)]
     fn parse_term(&mut self, token: Token) -> Result<Expression, ParserOrTokenError> {
         self.parse_binary_operation(
             token,
@@ -245,6 +304,7 @@ impl<'a> Parser<'a> {
         )
     }
 
+    #[allow(clippy::result_large_err)]
     fn parse_factor(&mut self, token: Token) -> Result<Expression, ParserOrTokenError> {
         self.parse_binary_operation(
             token,
@@ -253,6 +313,7 @@ impl<'a> Parser<'a> {
         )
     }
 
+    #[allow(clippy::result_large_err)]
     fn parse_unary(&mut self, token: Token) -> Result<Expression, ParserOrTokenError> {
         if matches!(token.kind, TokenType::Bang | TokenType::Minus) {
             let operator = token.kind.props().2.unwrap();
@@ -271,6 +332,7 @@ impl<'a> Parser<'a> {
         }
     }
 
+    #[allow(clippy::result_large_err)]
     fn parse_primary(&mut self, token: Token) -> Result<Expression, ParserOrTokenError> {
         match &token.kind {
             TokenType::LeftParen => {
@@ -313,6 +375,7 @@ impl<'a> Parser<'a> {
 
     // Helper functions
 
+    #[allow(clippy::result_large_err)]
     fn parse_binary_operation<F>(
         &mut self,
         token: Token,
@@ -348,6 +411,7 @@ impl<'a> Parser<'a> {
         Ok(left)
     }
 
+    #[allow(clippy::result_large_err)]
     fn advance(&mut self, prev_token: &Token) -> Result<Token, ParserOrTokenError> {
         match self.lexer.next() {
             Some(result) => result.map_err(ParserOrTokenError::Token),
@@ -358,6 +422,7 @@ impl<'a> Parser<'a> {
         }
     }
 
+    #[allow(clippy::result_large_err)]
     fn advance_expecting<F>(
         &mut self,
         prev_token: &Token,
@@ -378,6 +443,21 @@ impl<'a> Parser<'a> {
         }
     }
 
+    #[allow(clippy::result_large_err)]
+    fn advance_expecting_dft(
+        &mut self,
+        prev_token: &Token,
+        expected: TokenType,
+    ) -> Result<Token, ParserOrTokenError> {
+        self.advance_expecting(prev_token, expected.clone(), |tok| {
+            ParserErrorType::ExpectedNotFound {
+                expected,
+                found: tok.kind.clone(),
+            }
+        })
+    }
+
+    #[allow(clippy::result_large_err)]
     fn expect_semi(&mut self, prev_token: &Token) -> Result<Token, ParserOrTokenError> {
         self.advance_expecting(prev_token, TokenType::Semicolon, |_| {
             ParserErrorType::MissingSemicolen
@@ -426,6 +506,12 @@ impl Error for ParserError {
 pub enum ParserErrorType {
     #[error("Unexpected token '{token}'")]
     UnexpectedToken { token: String },
+
+    #[error("Expected '{expected}', but found '{found}'")]
+    ExpectedNotFound {
+        expected: TokenType,
+        found: TokenType,
+    },
 
     #[error("Expected closing ')'")]
     UnmatchedParenthesis,

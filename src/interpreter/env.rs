@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use super::object::Object;
 
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Clone)]
 pub(super) struct Env {
     parent: Option<Box<Env>>,
     symbols: HashMap<String, Symbol>,
@@ -10,7 +10,10 @@ pub(super) struct Env {
 
 impl Env {
     pub fn new() -> Self {
-        Self::default()
+        Self {
+            parent: None,
+            symbols: HashMap::new(),
+        }
     }
 
     pub fn get_symbol(&mut self, identifier: &str) -> Option<&mut Symbol> {
@@ -35,6 +38,12 @@ impl Env {
         if let Some(parent) = self.parent.take() {
             *self = *parent;
         }
+    }
+}
+
+impl Default for Env {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
