@@ -393,7 +393,7 @@ impl<'a> Parser<'a> {
                     ExpressionType::Binary {
                         left: Box::new(left),
                         operator,
-                        rigth: Box::new(right),
+                        right: Box::new(right),
                     },
                 );
             } else {

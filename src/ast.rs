@@ -146,7 +146,7 @@ impl Display for Expression {
             ExpressionType::Binary {
                 left,
                 operator,
-                rigth,
+                right: rigth,
             } => write!(f, "({} {} {})", operator, left, rigth),
             ExpressionType::Grouping { expr } => write!(f, "(group {})", expr),
             ExpressionType::Identifier(IdentifierStruct { name }) => write!(f, "{}", name),
@@ -179,7 +179,7 @@ pub enum ExpressionType {
     Binary {
         left: Box<Expression>,
         operator: BinaryOperator,
-        rigth: Box<Expression>,
+        right: Box<Expression>,
     },
     Grouping {
         expr: Box<Expression>,
@@ -322,7 +322,7 @@ mod tests {
                 })),
             })),
             operator: BinaryOperator::Times,
-            rigth: Box::new(fake_expression(ExpressionType::Grouping {
+            right: Box::new(fake_expression(ExpressionType::Grouping {
                 expr: Box::new(fake_expression(ExpressionType::Literal {
                     literal: LiteralExpression::Number(45.67),
                 })),
