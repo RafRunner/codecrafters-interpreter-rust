@@ -1,8 +1,10 @@
 use std::collections::HashMap;
 
+use replace_with::replace_with_or_abort;
+
 use super::object::Object;
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub(super) struct Env {
     parent: Option<Box<Env>>,
     symbols: HashMap<String, Symbol>,
@@ -27,11 +29,10 @@ impl Env {
     }
 
     pub fn enter_scope(&mut self) {
-        let new_env = Env {
-            parent: Some(Box::new(self.clone())),
+        replace_with_or_abort(self, |_self| Env {
+            parent: Some(Box::new(_self)),
             symbols: HashMap::new(),
-        };
-        *self = new_env;
+        });
     }
 
     pub fn exit_scope(&mut self) {
@@ -47,7 +48,7 @@ impl Default for Env {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub(super) enum Symbol {
     Variable(Object),
 }

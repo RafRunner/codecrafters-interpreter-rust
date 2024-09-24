@@ -75,9 +75,9 @@ impl Display for Statement {
                 }
             },
             StatementType::Block { stmts } => {
-                writeln!(
+                write!(
                     f,
-                    "{{{}}}",
+                    "{{\n{}\n}}",
                     stmts
                         .iter()
                         .map(|s| s.to_string())
@@ -90,9 +90,9 @@ impl Display for Statement {
                 then,
                 else_block,
             } => {
-                write!(f, "if ({})\n{}", condition, then)?;
+                write!(f, "if ({}) {{\n{}}}", condition, then)?;
                 if let Some(else_block) = else_block {
-                    writeln!(f, "else\n{}", else_block)?;
+                    write!(f, "else {{\n{}}}", else_block)?;
                 }
 
                 Ok(())
