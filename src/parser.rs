@@ -39,7 +39,7 @@ pub fn parse_program(
  *                 | blockStmt ;
  * exprStmt       -> expression ";" ;
  * ifStmt         -> "if" "(" expression ")" statement
- *                   ( "else" expression)? ;
+ *                   ( "else" statement)? ;
  * printStmt      -> "print" expression ";" ;
  * blockStmt      -> "{" declaration* "}" ;
  *
@@ -186,14 +186,7 @@ impl<'a> Parser<'a> {
                 // consume the else
                 let else_tok = self.lexer.next().unwrap().unwrap();
 
-                if self.lexer.peek().is_none() {
-                    return Err(ParserOrTokenError::Parser(ParserError::new(
-                        ParserErrorType::UnexpectedEof,
-                        else_tok,
-                    )));
-                }
-
-                let next = self.lexer.next().unwrap().unwrap();
+                let next = self.advance(&else_tok)?;
                 let block = self.parse_statement(next)?;
                 Some(Box::new(block))
             } else {

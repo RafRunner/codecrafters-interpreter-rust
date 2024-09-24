@@ -267,6 +267,58 @@ mod tests {
     }
 
     #[test]
+    fn test_evaluate_if_expressions() {
+        let source = "\
+        var number1 = 10 + 5;
+        var number2 = 3;
+        var result;
+
+        if (number1 > number2) {
+            result = true;
+        } else {
+            result = false; 
+        }
+ 
+        result
+        ";
+
+        let program = parse_program(&source, true).unwrap();
+        assert_eq!(evaluate(program).unwrap(), Object::True);
+
+        let source = "\
+        var number1 = 43;
+        var number2 = 21;
+        var result = false;
+
+        if (number2 + number1 > 100) {
+            result = true;
+        }
+ 
+        result
+        ";
+
+        let program = parse_program(&source, true).unwrap();
+        assert_eq!(evaluate(program).unwrap(), Object::False);
+
+        let source = "\
+        var result;
+
+        if (2 + 2 * 6 == 24)
+            result = \"wrong\";
+        else
+            result = \"right\";
+ 
+        result
+        ";
+
+        let program = parse_program(&source, true).unwrap();
+        assert_eq!(
+            evaluate(program).unwrap(),
+            Object::String(String::from("right"))
+        );
+    }
+
+    #[test]
     fn test_evaluate_errors() {
         let tests = vec![
             (
