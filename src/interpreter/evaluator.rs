@@ -155,7 +155,28 @@ impl Interpreter {
         right: Expression,
     ) -> Result<Object> {
         let left_value = self.execute_expression(left)?;
-        let right_value = self.execute_expression(right)?;
+        let right_value = match &operator {
+            // Short circuit
+            BinaryOperator::LogicOr => {
+                if left_value.is_truthy() {
+                    return Ok(Object::True);
+                } else {
+                    return self
+                        .execute_expression(right)
+                        .map(|right_value| right_value.as_bool_obj());
+                }
+            }
+            BinaryOperator::LogicAnd => {
+                if !left_value.is_truthy() {
+                    return Ok(Object::False);
+                } else {
+                    return self
+                        .execute_expression(right)
+                        .map(|right_value| right_value.as_bool_obj());
+                }
+            }
+            _ => self.execute_expression(right)?,
+        };
 
         match operator {
             BinaryOperator::Equals => Ok(Object::bool_as_obj(left_value == right_value)),
@@ -201,6 +222,9 @@ impl Interpreter {
                 }
                 _ => Err(anyhow!("Binary '/' can only be applied to numbers")),
             },
+            BinaryOperator::LogicOr | BinaryOperator::LogicAnd => {
+                panic!("Interpreter bug: logic operations should have been delt with above")
+            }
         }
     }
 

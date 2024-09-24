@@ -45,7 +45,9 @@ pub fn parse_program(
  *
  * expression     -> assignment
  * assignment     -> IDENTIFIER "=" assignment
- *                 | equality ;
+ *                 | logic_or ;
+ * logic_or       -> logic_and ("or" logic_and)* ;
+ * logic_and       -> equality ("and" equality)* ;
  * equality       -> comparison ( ( "!=" | "==" ) comparison )* ;
  * comparison     -> term ( ( ">" | ">=" | "<" | "<=" ) term )* ;
  * term           -> factor ( ( "-" | "+" ) factor )* ;
@@ -236,7 +238,7 @@ impl<'a> Parser<'a> {
 
     #[allow(clippy::result_large_err)]
     fn parse_assignment(&mut self, token: Token) -> Result<Expression, ParserOrTokenError> {
-        let left = self.parse_equality(token)?;
+        let left = self.parse_logic_or(token)?;
 
         if let Some(Ok(next)) = self.lexer.peek() {
             if next.kind == TokenType::Equal {
@@ -263,6 +265,16 @@ impl<'a> Parser<'a> {
         }
 
         Ok(left)
+    }
+
+    #[allow(clippy::result_large_err)]
+    fn parse_logic_or(&mut self, token: Token) -> Result<Expression, ParserOrTokenError> {
+        self.parse_binary_operation(token, Self::parse_logic_and, &[TokenType::Or])
+    }
+
+    #[allow(clippy::result_large_err)]
+    fn parse_logic_and(&mut self, token: Token) -> Result<Expression, ParserOrTokenError> {
+        self.parse_binary_operation(token, Self::parse_equality, &[TokenType::And])
     }
 
     #[allow(clippy::result_large_err)]

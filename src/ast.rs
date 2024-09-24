@@ -245,6 +245,9 @@ pub enum BinaryOperator {
     Minus,
     Times,
     Divide,
+
+    LogicOr,
+    LogicAnd,
 }
 
 impl Display for BinaryOperator {
@@ -260,6 +263,8 @@ impl Display for BinaryOperator {
             BinaryOperator::Minus => write!(f, "-"),
             BinaryOperator::Times => write!(f, "*"),
             BinaryOperator::Divide => write!(f, "/"),
+            BinaryOperator::LogicOr => write!(f, "or"),
+            BinaryOperator::LogicAnd => write!(f, "and"),
         }
     }
 }

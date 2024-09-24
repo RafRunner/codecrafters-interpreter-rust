@@ -21,6 +21,10 @@ impl Object {
     pub fn is_truthy(&self) -> bool {
         !matches!(self, Self::False | Self::Nil)
     }
+
+    pub fn as_bool_obj(&self) -> Self {
+        Self::bool_as_obj(self.is_truthy())
+    }
 }
 
 impl Display for Object {
