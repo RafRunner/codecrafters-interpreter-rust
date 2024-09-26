@@ -46,7 +46,7 @@ fn main() {
             }
         }
         "parse" => {
-            let program = parse_program_or_exit(&file_contents, true);
+            let program = dbg!(parse_program_or_exit(&file_contents, true));
             for stmt in program.statements {
                 println!("{}", stmt);
             }

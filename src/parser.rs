@@ -36,11 +36,13 @@ pub fn parse_program(
  * statement      -> exprStmt
  *                 | ifStmt
  *                 | printStmt
+ *                 | whileStmt
  *                 | blockStmt ;
  * exprStmt       -> expression ";" ;
  * ifStmt         -> "if" "(" expression ")" statement
  *                   ( "else" statement)? ;
  * printStmt      -> "print" expression ";" ;
+ * whileStmt      -> "while" "(" expression ")" statement ;
  * blockStmt      -> "{" declaration* "}" ;
  *
  * expression     -> assignment
@@ -132,6 +134,7 @@ impl<'a> Parser<'a> {
             TokenType::Print => self.parse_print_statement(token),
             TokenType::LeftBrace => self.parse_block_statement(token),
             TokenType::If => self.parse_if_statement(token),
+            TokenType::While => self.parse_while_statement(token),
             _ => self.parse_expression_statement(token),
         }
     }
@@ -200,10 +203,29 @@ impl<'a> Parser<'a> {
 
         Ok(Statement::new(
             token,
-            StatementType::IfStatement {
+            StatementType::If {
                 condition,
                 then: Box::new(then),
                 else_block,
+            },
+        ))
+    }
+
+    #[allow(clippy::result_large_err)]
+    fn parse_while_statement(&mut self, token: Token) -> Result<Statement, ParserOrTokenError> {
+        let open_paren = self.advance_expecting_dft(&token, TokenType::LeftParen)?;
+        let next = self.advance(&open_paren)?;
+        let condition = self.parse_expression(next)?;
+        let close_paren = self.advance_expecting_dft(&condition.token, TokenType::RightParen)?;
+
+        let next = self.advance(&close_paren)?;
+        let body = self.parse_statement(next)?;
+
+        Ok(Statement::new(
+            token,
+            StatementType::While {
+                condition,
+                body: Box::new(body),
             },
         ))
     }

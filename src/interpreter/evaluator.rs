@@ -21,10 +21,10 @@ impl Interpreter {
     }
 
     pub fn evaluate(&mut self, program: Program) -> Result<Option<Object>> {
-        self.evaluate_statements(program.statements)
+        self.evaluate_statements(&program.statements)
     }
 
-    fn evaluate_statements(&mut self, statements: Vec<Statement>) -> Result<Option<Object>> {
+    fn evaluate_statements(&mut self, statements: &[Statement]) -> Result<Option<Object>> {
         let mut output = None;
 
         for stmt in statements {
@@ -34,35 +34,38 @@ impl Interpreter {
         Ok(output)
     }
 
-    fn execute_statement(&mut self, stmt: Statement) -> Result<Option<Object>> {
-        match stmt.kind {
+    fn execute_statement(&mut self, stmt: &Statement) -> Result<Option<Object>> {
+        match &stmt.kind {
             StatementType::Expression { expr } => self.execute_expression_statement(expr),
             StatementType::Print { expr } => self.execute_print_statement(expr).map(|_| None),
             StatementType::Declaration { stmt } => {
                 self.execute_declaration_statement(stmt).map(|_| None)
             }
             StatementType::Block { stmts } => self.execute_block_statement(stmts),
-            StatementType::IfStatement {
+            StatementType::If {
                 condition,
                 then,
                 else_block,
             } => self
-                .execute_if_statement(condition, *then, else_block)
+                .execute_if_statement(condition, then, else_block.as_deref())
                 .map(|_| None),
+            StatementType::While { condition, body } => {
+                self.execute_while_statement(condition, body).map(|_| None)
+            }
         }
     }
 
-    fn execute_expression_statement(&mut self, expr: Expression) -> Result<Option<Object>> {
+    fn execute_expression_statement(&mut self, expr: &Expression) -> Result<Option<Object>> {
         Ok(Some(self.execute_expression(expr)?))
     }
 
-    fn execute_print_statement(&mut self, expr: Expression) -> Result<()> {
+    fn execute_print_statement(&mut self, expr: &Expression) -> Result<()> {
         let to_print = self.execute_expression(expr)?;
         println!("{}", to_print);
         Ok(())
     }
 
-    fn execute_declaration_statement(&mut self, stmt: DeclaraionStatement) -> Result<()> {
+    fn execute_declaration_statement(&mut self, stmt: &DeclaraionStatement) -> Result<()> {
         match stmt {
             DeclaraionStatement::VarDeclaration { identifier, value } => {
                 let value = if let Some(expr) = value {
@@ -71,14 +74,14 @@ impl Interpreter {
                     Object::Nil
                 };
                 self.env
-                    .insert_symbol(identifier.name, Symbol::Variable(value));
+                    .insert_symbol(identifier.name.clone(), Symbol::Variable(value));
             }
         };
 
         Ok(())
     }
 
-    fn execute_block_statement(&mut self, stmts: Vec<Statement>) -> Result<Option<Object>> {
+    fn execute_block_statement(&mut self, stmts: &[Statement]) -> Result<Option<Object>> {
         self.env.enter_scope();
         let result = self.evaluate_statements(stmts);
         self.env.exit_scope();
@@ -87,55 +90,62 @@ impl Interpreter {
 
     fn execute_if_statement(
         &mut self,
-        condition: Expression,
-        then: Statement,
-        else_block: Option<Box<Statement>>,
+        condition: &Expression,
+        then: &Statement,
+        else_block: Option<&Statement>,
     ) -> Result<()> {
-        let result = self.execute_expression(condition)?;
-        if result.is_truthy() {
+        if self.execute_expression(condition)?.is_truthy() {
             self.execute_statement(then)?;
         } else if let Some(else_block) = else_block {
-            self.execute_statement(*else_block)?;
+            self.execute_statement(else_block)?;
         }
 
         Ok(())
     }
 
-    fn execute_expression(&mut self, expression: Expression) -> Result<Object> {
-        match expression.kind {
-            ExpressionType::Literal { literal } => self.execute_literal_expression(literal),
+    fn execute_while_statement(&mut self, condition: &Expression, body: &Statement) -> Result<()> {
+        while self.execute_expression(condition)?.is_truthy() {
+            self.execute_statement(body)?;
+        }
+
+        Ok(())
+    }
+
+    fn execute_expression(&mut self, expression: &Expression) -> Result<Object> {
+        match &expression.kind {
+            ExpressionType::Literal { literal } => Ok(self.execute_literal_expression(literal)),
             ExpressionType::Unary { operator, expr } => {
-                self.execute_unary_expression(operator, *expr)
+                self.execute_unary_expression(operator, expr)
             }
             ExpressionType::Binary {
                 left,
                 operator,
                 right,
-            } => self.execute_binary_expression(*left, operator, *right),
-            ExpressionType::Grouping { expr } => self.execute_expression(*expr),
+            } => self.execute_binary_expression(left, operator, right),
+            ExpressionType::Grouping { expr } => self.execute_expression(expr),
             ExpressionType::Identifier(IdentifierStruct { name }) => {
-                self.execute_identifier_expression(name)
+                self.execute_identifier_expression(name.clone())
             }
             ExpressionType::Assignment { kind, value } => {
-                self.execute_assignment_expression(kind, *value)
+                self.execute_assignment_expression(kind, value)
             }
         }
     }
 
-    fn execute_literal_expression(&mut self, literal: LiteralExpression) -> Result<Object> {
+    fn execute_literal_expression(&mut self, literal: &LiteralExpression) -> Object {
         match literal {
-            LiteralExpression::Number(literal) => Ok(Object::Number(literal)),
-            LiteralExpression::String(literal) => Ok(Object::String(literal)),
-            LiteralExpression::True => Ok(Object::True),
-            LiteralExpression::False => Ok(Object::False),
-            LiteralExpression::Nil => Ok(Object::Nil),
+            LiteralExpression::Number(literal) => Object::Number(*literal),
+            LiteralExpression::String(literal) => Object::String(literal.clone()),
+            LiteralExpression::True => Object::True,
+            LiteralExpression::False => Object::False,
+            LiteralExpression::Nil => Object::Nil,
         }
     }
 
     fn execute_unary_expression(
         &mut self,
-        operator: UnaryOperator,
-        expr: Expression,
+        operator: &UnaryOperator,
+        expr: &Expression,
     ) -> Result<Object> {
         let inner = self.execute_expression(expr)?;
 
@@ -150,9 +160,9 @@ impl Interpreter {
 
     fn execute_binary_expression(
         &mut self,
-        left: Expression,
-        operator: BinaryOperator,
-        right: Expression,
+        left: &Expression,
+        operator: &BinaryOperator,
+        right: &Expression,
     ) -> Result<Object> {
         let left_value = self.execute_expression(left)?;
         let right_value = match &operator {
@@ -237,13 +247,13 @@ impl Interpreter {
 
     fn execute_assignment_expression(
         &mut self,
-        kind: AssignmentKind,
-        value: Expression,
+        kind: &AssignmentKind,
+        value: &Expression,
     ) -> Result<Object> {
         match kind {
             AssignmentKind::Variable { name } => {
                 let value = self.execute_expression(value)?;
-                if let Some(symbol) = self.env.get_symbol(&name) {
+                if let Some(symbol) = self.env.get_symbol(name) {
                     *symbol = Symbol::Variable(value.clone());
                     Ok(value)
                 } else {

@@ -85,7 +85,7 @@ impl Display for Statement {
                         .join("\n")
                 )
             }
-            StatementType::IfStatement {
+            StatementType::If {
                 condition,
                 then,
                 else_block,
@@ -96,6 +96,9 @@ impl Display for Statement {
                 }
 
                 Ok(())
+            }
+            StatementType::While { condition, body } => {
+                write!(f, "while ({}) {{\n{}}}", condition, body)
             }
         }
     }
@@ -115,7 +118,11 @@ pub enum StatementType {
     Block {
         stmts: Vec<Statement>,
     },
-    IfStatement {
+    While {
+        condition: Expression,
+        body: Box<Statement>,
+    },
+    If {
         condition: Expression,
         then: Box<Statement>,
         else_block: Option<Box<Statement>>,
