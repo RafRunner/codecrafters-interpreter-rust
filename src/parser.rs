@@ -37,12 +37,16 @@ pub fn parse_program(
  *                 | ifStmt
  *                 | printStmt
  *                 | whileStmt
+ *                 | forStmt
  *                 | blockStmt ;
  * exprStmt       -> expression ";" ;
  * ifStmt         -> "if" "(" expression ")" statement
  *                   ( "else" statement)? ;
  * printStmt      -> "print" expression ";" ;
  * whileStmt      -> "while" "(" expression ")" statement ;
+ * forStmt        -> "for" "(" ( varDecl | exprStmt | ";" )
+ *                    expression? ";"
+ *                    expression? ";" statement ;
  * blockStmt      -> "{" declaration* "}" ;
  *
  * expression     -> assignment
@@ -135,6 +139,7 @@ impl<'a> Parser<'a> {
             TokenType::LeftBrace => self.parse_block_statement(token),
             TokenType::If => self.parse_if_statement(token),
             TokenType::While => self.parse_while_statement(token),
+            TokenType::For => self.parse_for_statement(token),
             _ => self.parse_expression_statement(token),
         }
     }
@@ -231,6 +236,57 @@ impl<'a> Parser<'a> {
     }
 
     #[allow(clippy::result_large_err)]
+    fn parse_for_statement(&mut self, token: Token) -> Result<Statement, ParserOrTokenError> {
+        let mut stmts = Vec::new();
+
+        let open_paren = self.advance_expecting_dft(&token, TokenType::LeftParen)?;
+        let next = self.advance(&open_paren)?;
+
+        let initializer = if next.kind == TokenType::Semicolon {
+            None
+        } else if next.kind == TokenType::Var {
+            Some(self.parse_variable_statement(next.clone())?)
+        } else {
+            let expr = self.parse_expression(next.clone())?;
+            Some(Statement::expression(expr))
+        };
+        stmts.extend(initializer);
+
+        let next = self.advance(&next)?;
+        let condition = self.parse_expression(next)?;
+        let semi = self.expect_semi(&condition.token)?;
+
+        let next = self.advance(&semi)?;
+        let increment = Statement::expression(self.parse_expression(next)?);
+        let semi = self.advance_expecting_dft(&increment.token, TokenType::RightParen)?;
+
+        let next = self.advance(&semi)?;
+        let mut body = self.parse_statement(next)?;
+
+        if let StatementType::Block { stmts } = &mut body.kind {
+            stmts.push(increment);
+        } else {
+            body = Statement::new(
+                body.token.clone(),
+                StatementType::Block {
+                    stmts: vec![body, increment],
+                },
+            )
+        }
+
+        let while_stmt = Statement::new(
+            token.clone(),
+            StatementType::While {
+                condition,
+                body: Box::new(body),
+            },
+        );
+        stmts.push(while_stmt);
+
+        Ok(Statement::new(token, StatementType::Block { stmts }))
+    }
+
+    #[allow(clippy::result_large_err)]
     fn parse_expression_statement(
         &mut self,
         token: Token,
@@ -247,10 +303,7 @@ impl<'a> Parser<'a> {
                 )));
             }
         }
-        Ok(Statement::new(
-            token,
-            StatementType::Expression { expr: expression },
-        ))
+        Ok(Statement::expression(expression))
     }
 
     #[allow(clippy::result_large_err)]

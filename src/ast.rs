@@ -45,6 +45,13 @@ impl Statement {
         Self { token, kind }
     }
 
+    pub fn expression(expression: Expression) -> Self {
+        Self::new(
+            expression.token.clone(),
+            StatementType::Expression { expr: expression },
+        )
+    }
+
     pub fn var_declaration(var_token: Token, identifier: Token, value: Option<Expression>) -> Self {
         Self::new(
             var_token,

@@ -368,7 +368,7 @@ mod tests {
         result
         ";
 
-        let program = parse_program(&source, true).unwrap();
+        let program = parse_program(source, true).unwrap();
         assert_eq!(evaluate(program).unwrap(), Object::True);
 
         let source = "\
@@ -383,7 +383,7 @@ mod tests {
         result
         ";
 
-        let program = parse_program(&source, true).unwrap();
+        let program = parse_program(source, true).unwrap();
         assert_eq!(evaluate(program).unwrap(), Object::False);
 
         let source = "\
@@ -397,11 +397,47 @@ mod tests {
         result
         ";
 
-        let program = parse_program(&source, true).unwrap();
+        let program = parse_program(source, true).unwrap();
         assert_eq!(
             evaluate(program).unwrap(),
             Object::String(String::from("right"))
         );
+    }
+
+    #[test]
+    fn test_while_statement() {
+        let source = "\
+        var i = 1;
+        var sum = 0;
+
+        while (i <= 10) {
+            sum = sum + i;
+            i = i + 1;
+        }
+
+        sum
+        ";
+
+        let program = parse_program(source, true).unwrap();
+        assert_eq!(evaluate(program).unwrap(), Object::Number(55.0));
+    }
+
+    #[test]
+    fn test_for_statement() {
+        let source = "\
+        var a = 0;
+        var temp;
+
+        for (var b = 1; a < 10000; b = temp + b) {
+          temp = a;
+          a = b;
+        }
+
+        a
+        ";
+
+        let program = parse_program(source, true).unwrap();
+        assert_eq!(evaluate(program).unwrap(), Object::Number(10946.0));
     }
 
     #[test]
