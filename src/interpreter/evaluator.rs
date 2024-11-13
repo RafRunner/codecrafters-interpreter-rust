@@ -129,6 +129,7 @@ impl Interpreter {
             ExpressionType::Assignment { kind, value } => {
                 self.execute_assignment_expression(kind, value)
             }
+            ExpressionType::Call { calee, arguments } => todo!(),
         }
     }
 

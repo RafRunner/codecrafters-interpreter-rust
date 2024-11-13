@@ -58,8 +58,9 @@ pub fn parse_program(
  * comparison     -> term ( ( ">" | ">=" | "<" | "<=" ) term )* ;
  * term           -> factor ( ( "-" | "+" ) factor )* ;
  * factor         -> unary ( ( "/" | "*" ) unary )* ;
- * unary          -> ( "!" | "-" ) unary
- *                 | primary ;
+ * unary          -> ( "!" | "-" ) unary | call ;
+ * call           -> primary ( "(" arguments? ")" )* ;
+ * arguments      -> expression ( ","  expression )* ;
  * primary        -> NUMBER | STRING | "true" | "false" | "nil"
  *                 | "(" expression ") | IDENTIFIER ;
  */
@@ -408,8 +409,65 @@ impl<'a> Parser<'a> {
                 },
             ))
         } else {
-            self.parse_primary(token)
+            self.parse_call(token)
         }
+    }
+
+    #[allow(clippy::result_large_err)]
+    fn parse_call(&mut self, token: Token) -> Result<Expression, ParserOrTokenError> {
+        let primary = self.parse_primary(token)?;
+
+        if let Some(Ok(next)) = self.lexer.peek().cloned() {
+            if next.kind == TokenType::LeftParen {
+                self.lexer.next().unwrap().unwrap();
+                let arguments = self.parse_arguments(&next)?;
+
+                return Ok(Expression::new(
+                    primary.token.clone(),
+                    ExpressionType::Call {
+                        calee: Box::new(primary),
+                        arguments,
+                    },
+                ));
+            }
+        }
+
+        Ok(primary)
+    }
+
+    #[allow(clippy::result_large_err)]
+    fn parse_arguments(
+        &mut self,
+        prev_token: &Token,
+    ) -> Result<Vec<Expression>, ParserOrTokenError> {
+        let mut args = Vec::new();
+        let mut prev_token = prev_token.clone();
+
+        loop {
+            let next = self.advance(&prev_token)?;
+            if next.kind == TokenType::RightParen {
+                break;
+            }
+
+            let arg = self.parse_expression(next.clone())?;
+            args.push(arg);
+
+            let next = self.advance(&prev_token)?;
+            match &next.kind {
+                TokenType::RightParen => break,
+                TokenType::Comma => (),
+                _ => {
+                    return Err(ParserOrTokenError::Parser(ParserError::new(
+                        ParserErrorType::UnmatchedParenthesis,
+                        next,
+                    )))
+                }
+            }
+
+            prev_token = next;
+        }
+
+        Ok(args)
     }
 
     #[allow(clippy::result_large_err)]

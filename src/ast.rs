@@ -167,6 +167,18 @@ impl Display for Expression {
             ExpressionType::Assignment { kind, value } => match kind {
                 AssignmentKind::Variable { name } => write!(f, "{} = {}", name, value),
             },
+            ExpressionType::Call { calee, arguments } => {
+                write!(
+                    f,
+                    "({}({}))",
+                    calee,
+                    arguments
+                        .iter()
+                        .map(|it| it.to_string())
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
+            }
         }
     }
 }
@@ -202,6 +214,10 @@ pub enum ExpressionType {
     Assignment {
         kind: AssignmentKind,
         value: Box<Expression>,
+    },
+    Call {
+        calee: Box<Expression>,
+        arguments: Vec<Expression>,
     },
 }
 
