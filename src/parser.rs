@@ -415,20 +415,22 @@ impl<'a> Parser<'a> {
 
     #[allow(clippy::result_large_err)]
     fn parse_call(&mut self, token: Token) -> Result<Expression, ParserOrTokenError> {
-        let primary = self.parse_primary(token)?;
+        let mut primary = self.parse_primary(token)?;
 
-        if let Some(Ok(next)) = self.lexer.peek().cloned() {
+        while let Some(Ok(next)) = self.lexer.peek().cloned() {
             if next.kind == TokenType::LeftParen {
                 self.lexer.next().unwrap().unwrap();
                 let arguments = self.parse_arguments(&next)?;
 
-                return Ok(Expression::new(
-                    primary.token.clone(),
+                primary = Expression::new(
+                    next,
                     ExpressionType::Call {
                         calee: Box::new(primary),
                         arguments,
                     },
-                ));
+                );
+            } else {
+                break;
             }
         }
 
@@ -447,6 +449,12 @@ impl<'a> Parser<'a> {
             let next = self.advance(&prev_token)?;
             if next.kind == TokenType::RightParen {
                 break;
+            }
+            if args.len() == 255 {
+                return Err(ParserOrTokenError::Parser(ParserError::new(
+                    ParserErrorType::TooManyArguments,
+                    next,
+                )));
             }
 
             let arg = self.parse_expression(next.clone())?;
@@ -665,6 +673,9 @@ pub enum ParserErrorType {
 
     #[error("Block not closed.")]
     BlockNotClosed,
+
+    #[error("Can't have more than 255 arguments.")]
+    TooManyArguments,
 
     #[error("Unexpected end of file")]
     UnexpectedEof,
