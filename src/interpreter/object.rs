@@ -1,5 +1,7 @@
 use std::fmt::{Display, Formatter};
 
+use super::evaluator::Interpreter;
+
 #[derive(Debug, PartialEq, Clone)]
 pub enum Object {
     True,
@@ -7,6 +9,10 @@ pub enum Object {
     Nil,
     Number(f64),
     String(String),
+    Callable {
+        arity: usize,
+        call: fn(&mut Interpreter, &[Object]) -> anyhow::Result<Object>,
+    },
 }
 
 impl Object {
@@ -30,11 +36,12 @@ impl Object {
 impl Display for Object {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            Object::True => write!(f, "true"),
-            Object::False => write!(f, "false"),
-            Object::Nil => write!(f, "nil"),
-            Object::Number(n) => write!(f, "{}", n),
-            Object::String(s) => write!(f, "{}", s),
+            Self::True => write!(f, "true"),
+            Self::False => write!(f, "false"),
+            Self::Nil => write!(f, "nil"),
+            Self::Number(n) => write!(f, "{}", n),
+            Self::String(s) => write!(f, "{}", s),
+            Self::Callable { arity, .. } => write!(f, "<fn {}>", arity),
         }
     }
 }

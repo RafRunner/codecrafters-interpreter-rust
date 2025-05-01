@@ -1,3 +1,5 @@
+use std::time::{SystemTime, UNIX_EPOCH};
+
 use crate::ast::{
     AssignmentKind, BinaryOperator, DeclaraionStatement, Expression, ExpressionType,
     IdentifierStruct, LiteralExpression, Program, Statement, StatementType, UnaryOperator,
@@ -9,10 +11,31 @@ use super::{
     object::Object,
 };
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct Interpreter {
     // TODO just a temp env to pass the first stage
     env: Env,
+}
+
+impl Default for Interpreter {
+    fn default() -> Self {
+        let mut env = Env::new();
+        env.insert_symbol(
+            "clock".to_string(),
+            Symbol::Variable(Object::Callable {
+                arity: 0,
+                call: |_, _| {
+                    let timestamp = SystemTime::now()
+                        .duration_since(UNIX_EPOCH)
+                        .unwrap()
+                        .as_secs();
+                    Ok(Object::Number(timestamp as f64))
+                },
+            }),
+        );
+
+        Self { env }
+    }
 }
 
 impl Interpreter {
@@ -129,7 +152,28 @@ impl Interpreter {
             ExpressionType::Assignment { kind, value } => {
                 self.execute_assignment_expression(kind, value)
             }
-            ExpressionType::Call { calee, arguments } => todo!(),
+            ExpressionType::Call { calee, arguments } => {
+                let callee = self.execute_expression(calee)?;
+
+                let mut args = Vec::new();
+                for arg in arguments {
+                    args.push(self.execute_expression(arg)?);
+                }
+
+                match callee {
+                    Object::Callable { arity, call } => {
+                        if args.len() != arity {
+                            return Err(anyhow!(
+                                "Expected {} arguments but got {}.",
+                                arity,
+                                args.len()
+                            ));
+                        }
+                        call(self, &args)
+                    }
+                    _ => Err(anyhow!("Can only call functions and classes.")),
+                }
+            }
         }
     }
 
@@ -210,7 +254,8 @@ impl Interpreter {
             },
             BinaryOperator::Plus => match (left_value, right_value) {
                 (Object::Number(l), Object::Number(r)) => Ok(Object::Number(l + r)),
-                (Object::String(l), Object::String(r)) => Ok(Object::String(l + &r)),
+                (Object::String(l), any) => Ok(Object::String(l + &any.to_string())),
+                (any, Object::String(r)) => Ok(Object::String(any.to_string() + &r)),
                 _ => Err(anyhow!(
                     "Binary '+' can only be applied to numbers or concatenated with strings"
                 )),
@@ -439,6 +484,18 @@ mod tests {
 
         let program = parse_program(source, true).unwrap();
         assert_eq!(evaluate(program).unwrap(), Object::Number(10946.0));
+
+        let source = "\
+        var a = 0;
+        var i = 0;
+
+        for (; i < 10; i = i + 1) {
+            a = a + i;
+        }
+        a
+        ";
+        let program = parse_program(source, true).unwrap();
+        assert_eq!(evaluate(program).unwrap(), Object::Number(45.0));
     }
 
     #[test]
@@ -457,6 +514,14 @@ mod tests {
                 "true >= false",
                 "Binary '>=' can only be applied to numbers",
             ),
+            (
+                "\"hello\"()",
+                "Can only call functions and classes.",
+            ),
+            (
+                "var time = clock(20);",
+                "Expected 0 arguments but got 1.",
+            )
         ];
 
         for (input, expected_err) in tests {
@@ -470,5 +535,18 @@ mod tests {
                 input
             );
         }
+    }
+
+    #[test]
+    fn test_native_functions() {
+        let source = "\
+        var time = clock();
+        var result = time > 0;
+        result
+        ";
+
+        let program = parse_program(source, true).unwrap();
+        let result = evaluate(program).unwrap();
+        assert_eq!(result, Object::True);
     }
 }
