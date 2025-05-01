@@ -153,6 +153,10 @@ impl Token {
             column,
         }
     }
+
+    pub fn genereted(kind: TokenType, lexeme: &str) -> Self {
+        Self::new(kind, lexeme, 0, 0)
+    }
 }
 
 impl Display for Token {

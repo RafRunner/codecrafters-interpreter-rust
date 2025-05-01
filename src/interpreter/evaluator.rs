@@ -513,13 +513,32 @@ mod tests {
         var a = 0;
         var i = 0;
 
-        for (; i < 10; i = i + 1) {
+        for (; i < 10;) {
             a = a + i;
+            i = i + 1
         }
         a
         ";
         let program = parse_program(source, true).unwrap();
         assert_eq!(evaluate(program).unwrap(), Object::Number(45.0));
+
+        let source = "\
+        var quz = \"before\";
+
+        for (var quz = 0; quz < 1; quz = quz + 1) {
+            print quz;
+            var quz = -1;
+            print quz;
+        }
+
+        quz
+        ";
+
+        let program = parse_program(source, true).unwrap();
+        assert_eq!(
+            evaluate(program).unwrap(),
+            Object::String("before".to_string())
+        );
     }
 
     #[test]

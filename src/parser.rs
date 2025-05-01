@@ -229,53 +229,91 @@ impl<'a> Parser<'a> {
         ))
     }
 
+    // --- Desugar For Loop ---
+    // A for loop `for (init; cond; incr) body` is syntactic sugar for:
+    // {
+    //   init;
+    //   while (cond) {
+    //     body;
+    //     incr;
+    //   }
+    // }
     fn parse_for_statement(&mut self, token: Token) -> Result<Statement, ParserOrTokenError> {
         let mut stmts = Vec::new();
-
         let open_paren = self.advance_expecting_dft(&token, TokenType::LeftParen)?;
-        let next = self.advance(&open_paren)?;
 
-        let initializer = if next.kind == TokenType::Semicolon {
-            None
-        } else if next.kind == TokenType::Var {
-            Some(self.parse_variable_statement(next.clone())?)
-        } else {
-            let expr = self.parse_expression(next.clone())?;
-            Some(Statement::expression(expr))
+        // --- Parse Initializer ---
+        // The initializer can be a variable declaration, an expression statement, or empty.
+        let next = self.advance(&open_paren)?;
+        let initializer = match next.kind {
+            TokenType::Semicolon => None,
+            TokenType::Var => {
+                let var_decl = self.parse_variable_statement(next)?;
+                Some(var_decl)
+            }
+            _ => {
+                // Must be an expression statement or an error
+                let expr_stmt = self.parse_expression_statement(next)?;
+                Some(expr_stmt)
+            }
         };
         stmts.extend(initializer);
 
-        let next = self.advance(&next)?;
-        let condition = self.parse_expression(next)?;
-        let semi = self.expect_semi(&condition.token)?;
+        // --- Parse Condition ---
+        // The condition is an optional expression followed by a semicolon.
+        let next = self.advance(&open_paren)?;
+        let (condition, condition_semi) = if next.kind == TokenType::Semicolon {
+            (None, next)
+        } else {
+            // Must be an expression or an error
+            let expr = self.parse_expression(next)?;
+            let semi = self.expect_semi(&expr.token)?;
+            (Some(expr), semi)
+        };
 
-        let next = self.advance(&semi)?;
-        let increment = Statement::expression(self.parse_expression(next)?);
-        let semi = self.advance_expecting_dft(&increment.token, TokenType::RightParen)?;
+        // --- Parse Increment ---
+        // The increment is an optional expression followed by the closing parenthesis.
+        let next = self.advance(&condition_semi)?;
+        let (increment, rparen) = if next.kind == TokenType::RightParen {
+            (None, next)
+        } else {
+            let expr = self.parse_expression(next)?;
+            let rparen = self.advance_expecting_dft(&expr.token, TokenType::RightParen)?;
+            (Some(Statement::expression(expr)), rparen)
+        };
 
-        let next = self.advance(&semi)?;
+        // --- Parse Body ---
+        let next = self.advance(&rparen)?;
         let mut body = self.parse_statement(next)?;
 
-        if let StatementType::Block { stmts } = &mut body.kind {
-            stmts.push(increment);
-        } else {
+        // 1. Add the increment to the end of the body block.
+        if let Some(inc_stmt) = increment {
             body = Statement::new(
                 body.token.clone(),
                 StatementType::Block {
-                    stmts: vec![body, increment],
+                    stmts: vec![body, inc_stmt],
                 },
             )
         }
 
+        // 2. Create the while loop (condition defaults to true if omitted).
+        let condition_expr = condition.unwrap_or_else(|| {
+            Expression::literal(
+                Token::genereted(TokenType::True, "true"),
+                LiteralExpression::True,
+            )
+        });
+
         let while_stmt = Statement::new(
             token.clone(),
             StatementType::While {
-                condition,
+                condition: condition_expr,
                 body: Box::new(body),
             },
         );
         stmts.push(while_stmt);
 
+        // 3. Wrap the while loop in a block.
         Ok(Statement::new(token, StatementType::Block { stmts }))
     }
 
