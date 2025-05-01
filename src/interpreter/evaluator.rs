@@ -37,9 +37,7 @@ impl Default for Interpreter {
             "str".to_string(),
             Symbol::Variable(Object::Callable {
                 arity: 1,
-                call: |_, args| {
-                    Ok(Object::String(args[0].to_string()))
-                },
+                call: |_, args| Ok(Object::String(args[0].to_string())),
             }),
         );
 
@@ -222,22 +220,18 @@ impl Interpreter {
         let right_value = match &operator {
             // Short circuit
             BinaryOperator::LogicOr => {
-                if left_value.is_truthy() {
-                    return Ok(Object::True);
+                return if left_value.is_truthy() {
+                    Ok(left_value)
                 } else {
-                    return self
-                        .execute_expression(right)
-                        .map(|right_value| right_value.as_bool_obj());
-                }
+                    self.execute_expression(right)
+                };
             }
             BinaryOperator::LogicAnd => {
-                if !left_value.is_truthy() {
-                    return Ok(Object::False);
+                return if !left_value.is_truthy() {
+                    Ok(left_value)
                 } else {
-                    return self
-                        .execute_expression(right)
-                        .map(|right_value| right_value.as_bool_obj());
-                }
+                    self.execute_expression(right)
+                };
             }
             _ => self.execute_expression(right)?,
         };
@@ -391,6 +385,28 @@ mod tests {
     }
 
     #[test]
+    fn test_logical_operations() {
+        let tests = vec![
+            ("true or false", Object::True),
+            ("false or false", Object::False),
+            ("true and true", Object::True),
+            ("true and false", Object::False),
+            ("false or 22", Object::Number(22.0)),
+            ("43 or 12", Object::Number(43.0)),
+            ("false and 22", Object::False),
+            ("true and 12", Object::Number(12.0)),
+            ("false and false", Object::False),
+            ("!true or false", Object::False),
+            ("!false or true", Object::True),
+        ];
+
+        for (input, expected) in tests {
+            let program = parse_program(input, true).unwrap();
+            assert_eq!(evaluate(program).unwrap(), expected, "Input: {}", input);
+        }
+    }
+
+    #[test]
     fn test_evaluate_complex_expressions() {
         let tests = vec![
             ("-(-3 + 2) * 4", Object::Number(4.0)),
@@ -522,18 +538,12 @@ mod tests {
                 "true >= false",
                 "Binary '>=' can only be applied to numbers",
             ),
-            (
-                "\"hello\"()",
-                "Can only call functions and classes.",
-            ),
-            (
-                "var time = clock(20);",
-                "Expected 0 arguments but got 1.",
-            ),
+            ("\"hello\"()", "Can only call functions and classes."),
+            ("var time = clock(20);", "Expected 0 arguments but got 1."),
             (
                 "\"hello\" + 5",
                 "Binary '+' can only be applied to numbers or concatenated with strings",
-            )
+            ),
         ];
 
         for (input, expected_err) in tests {
