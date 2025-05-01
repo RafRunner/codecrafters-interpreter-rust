@@ -33,6 +33,15 @@ impl Default for Interpreter {
                 },
             }),
         );
+        env.insert_symbol(
+            "str".to_string(),
+            Symbol::Variable(Object::Callable {
+                arity: 1,
+                call: |_, args| {
+                    Ok(Object::String(args[0].to_string()))
+                },
+            }),
+        );
 
         Self { env }
     }
@@ -254,8 +263,7 @@ impl Interpreter {
             },
             BinaryOperator::Plus => match (left_value, right_value) {
                 (Object::Number(l), Object::Number(r)) => Ok(Object::Number(l + r)),
-                (Object::String(l), any) => Ok(Object::String(l + &any.to_string())),
-                (any, Object::String(r)) => Ok(Object::String(any.to_string() + &r)),
+                (Object::String(l), Object::String(r)) => Ok(Object::String(l + &r)),
                 _ => Err(anyhow!(
                     "Binary '+' can only be applied to numbers or concatenated with strings"
                 )),
@@ -521,6 +529,10 @@ mod tests {
             (
                 "var time = clock(20);",
                 "Expected 0 arguments but got 1.",
+            ),
+            (
+                "\"hello\" + 5",
+                "Binary '+' can only be applied to numbers or concatenated with strings",
             )
         ];
 
@@ -548,5 +560,14 @@ mod tests {
         let program = parse_program(source, true).unwrap();
         let result = evaluate(program).unwrap();
         assert_eq!(result, Object::True);
+
+        let source = "\
+        var str = \"hello\" + str(123);
+        str
+        ";
+
+        let program = parse_program(source, true).unwrap();
+        let result = evaluate(program).unwrap();
+        assert_eq!(result, Object::String("hello123".to_string()));
     }
 }
