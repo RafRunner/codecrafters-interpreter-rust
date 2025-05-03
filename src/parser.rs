@@ -532,8 +532,19 @@ impl<'a> Parser<'a> {
                     params.push(IdentifierStruct { name: next.lexeme });
 
                     if let Some(Ok(tok)) = self.lexer.peek() {
-                        if tok.kind == TokenType::Comma {
-                            self.lexer.next().unwrap().unwrap();
+                        match tok.kind {
+                            TokenType::RightParen => (),
+                            TokenType::Comma => {
+                                self.lexer.next().unwrap().unwrap();
+                            }
+                            _ => {
+                                return Err(ParserOrTokenError::Parser(ParserError::new(
+                                    ParserErrorType::InvalidArguments {
+                                        found: tok.kind.clone(),
+                                    },
+                                    tok.clone(),
+                                )))
+                            }
                         }
                     }
                 }
@@ -789,6 +800,9 @@ pub enum ParserErrorType {
 
     #[error("Unexpected end of file")]
     UnexpectedEof,
+
+    #[error("Expected COMMA or RIGHT_PAREN in function definition parameters, but found {found}.")]
+    InvalidArguments { found: TokenType },
 }
 
 #[cfg(test)]
