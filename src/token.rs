@@ -148,7 +148,7 @@ impl Token {
     pub fn new(kind: TokenType, lexeme: &str, line: usize, column: usize) -> Self {
         Self {
             kind,
-            lexeme: String::from(lexeme),
+            lexeme: lexeme.to_owned(),
             line,
             column,
         }
@@ -164,7 +164,7 @@ impl Display for Token {
         let literal = match &self.kind {
             TokenType::String(s) => s.clone(),
             TokenType::Number(n) => format!("{:?}", n),
-            _ => String::from("null"),
+            _ => "null".to_owned(),
         };
 
         write!(

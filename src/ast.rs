@@ -2,7 +2,7 @@ use std::fmt::{Debug, Display, Formatter};
 
 use crate::token::Token;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Program {
     pub statements: Vec<Statement>,
 }
@@ -34,7 +34,7 @@ impl Display for Program {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Statement {
     pub token: Token,
     pub kind: StatementType,
@@ -80,6 +80,23 @@ impl Display for Statement {
                         write!(f, "var {};", identifier.name)
                     }
                 }
+                DeclaraionStatement::FunctionDeclaration(FunctionDeclarationStruct {
+                    identifier,
+                    params,
+                    body,
+                }) => {
+                    write!(
+                        f,
+                        "fun {}({}) {{\n{}}}",
+                        identifier.name,
+                        params
+                            .iter()
+                            .map(|it| it.name.clone())
+                            .collect::<Vec<_>>()
+                            .join(", "),
+                        body
+                    )
+                }
             },
             StatementType::Block { stmts } => {
                 write!(
@@ -111,7 +128,7 @@ impl Display for Statement {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum StatementType {
     Expression {
         expr: Expression,
@@ -136,7 +153,7 @@ pub enum StatementType {
     },
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Expression {
     pub token: Token,
     pub kind: ExpressionType,
@@ -183,17 +200,17 @@ impl Display for Expression {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct IdentifierStruct {
     pub name: String,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum AssignmentKind {
     Variable { name: String },
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum ExpressionType {
     Literal {
         literal: LiteralExpression,
@@ -227,7 +244,7 @@ impl ExpressionType {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum LiteralExpression {
     Number(f64),
     String(String),
@@ -248,7 +265,7 @@ impl Display for LiteralExpression {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum UnaryOperator {
     Negative,
     Negation,
@@ -263,7 +280,7 @@ impl Display for UnaryOperator {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum BinaryOperator {
     Equals,
     NotEquals,
@@ -299,12 +316,20 @@ impl Display for BinaryOperator {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum DeclaraionStatement {
     VarDeclaration {
         identifier: IdentifierStruct,
         value: Option<Expression>,
     },
+    FunctionDeclaration(FunctionDeclarationStruct),
+}
+
+#[derive(Debug, Clone)]
+pub struct FunctionDeclarationStruct {
+    pub identifier: IdentifierStruct,
+    pub params: Vec<IdentifierStruct>,
+    pub body: Box<Statement>,
 }
 
 #[cfg(test)]

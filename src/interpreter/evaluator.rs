@@ -2,52 +2,44 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::ast::{
     AssignmentKind, BinaryOperator, DeclaraionStatement, Expression, ExpressionType,
-    IdentifierStruct, LiteralExpression, Program, Statement, StatementType, UnaryOperator,
+    FunctionDeclarationStruct, IdentifierStruct, LiteralExpression, Program, Statement,
+    StatementType, UnaryOperator,
 };
 use anyhow::{anyhow, Result};
 
-use super::{
-    env::{Env, Symbol},
-    object::Object,
-};
+use super::{env::Env, object::Object};
 
 #[derive(Debug)]
 pub struct Interpreter {
     // TODO just a temp env to pass the first stage
-    env: Env,
+    pub env: Env,
 }
 
 impl Default for Interpreter {
     fn default() -> Self {
-        let mut env = Env::new();
-        env.insert_symbol(
-            "clock".to_string(),
-            Symbol::Variable(Object::Callable {
-                arity: 0,
-                call: |_, _| {
-                    let timestamp = SystemTime::now()
-                        .duration_since(UNIX_EPOCH)
-                        .unwrap()
-                        .as_secs();
-                    Ok(Object::Number(timestamp as f64))
-                },
-            }),
-        );
-        env.insert_symbol(
-            "str".to_string(),
-            Symbol::Variable(Object::Callable {
-                arity: 1,
-                call: |_, args| Ok(Object::String(args[0].to_string())),
-            }),
-        );
-
-        Self { env }
+        Self::new()
     }
 }
 
 impl Interpreter {
     pub fn new() -> Self {
-        Self::default()
+        let mut env = Env::new();
+        env.insert_symbol(
+            "clock",
+            Object::new_native_fn("clock", 0, |_, _| {
+                let timestamp = SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .unwrap()
+                    .as_secs();
+                Ok(Object::Number(timestamp as f64))
+            }),
+        );
+        env.insert_symbol(
+            "str",
+            Object::new_native_fn("str", 1, |_, args| Ok(Object::String(args[0].to_string()))),
+        );
+
+        Self { env }
     }
 
     pub fn evaluate(&mut self, program: Program) -> Result<Option<Object>> {
@@ -64,9 +56,9 @@ impl Interpreter {
         Ok(output)
     }
 
-    fn execute_statement(&mut self, stmt: &Statement) -> Result<Option<Object>> {
+    pub fn execute_statement(&mut self, stmt: &Statement) -> Result<Option<Object>> {
         match &stmt.kind {
-            StatementType::Expression { expr } => self.execute_expression_statement(expr),
+            StatementType::Expression { expr } => Ok(Some(self.execute_expression(expr)?)),
             StatementType::Print { expr } => self.execute_print_statement(expr).map(|_| None),
             StatementType::Declaration { stmt } => {
                 self.execute_declaration_statement(stmt).map(|_| None)
@@ -85,10 +77,6 @@ impl Interpreter {
         }
     }
 
-    fn execute_expression_statement(&mut self, expr: &Expression) -> Result<Option<Object>> {
-        Ok(Some(self.execute_expression(expr)?))
-    }
-
     fn execute_print_statement(&mut self, expr: &Expression) -> Result<()> {
         let to_print = self.execute_expression(expr)?;
         println!("{}", to_print);
@@ -103,10 +91,23 @@ impl Interpreter {
                 } else {
                     Object::Nil
                 };
-                self.env
-                    .insert_symbol(identifier.name.clone(), Symbol::Variable(value));
+                self.env.insert_symbol(&identifier.name, value);
             }
-        };
+            DeclaraionStatement::FunctionDeclaration(FunctionDeclarationStruct {
+                identifier,
+                params,
+                body,
+            }) => {
+                // Create a new user function by passing the parameters and body directly
+                let user_fn = Object::new_user_fn(
+                    &identifier.name,
+                    params.clone(),
+                    body.clone(), // Use body.clone() which is already a Box<Statement>
+                );
+
+                self.env.insert_symbol(&identifier.name, user_fn);
+            }
+        }
 
         Ok(())
     }
@@ -168,15 +169,15 @@ impl Interpreter {
                 }
 
                 match callee {
-                    Object::Callable { arity, call } => {
-                        if args.len() != arity {
+                    Object::Function(callable) => {
+                        if args.len() != callable.arity() {
                             return Err(anyhow!(
                                 "Expected {} arguments but got {}.",
-                                arity,
+                                callable.arity(),
                                 args.len()
                             ));
                         }
-                        call(self, &args)
+                        callable.call(self, &args)
                     }
                     _ => Err(anyhow!("Can only call functions and classes.")),
                 }
@@ -206,7 +207,7 @@ impl Interpreter {
                 Object::Number(n) => Ok(Object::Number(-n)),
                 _ => Err(anyhow!("Unary '-' can only be applied to numbers")),
             },
-            UnaryOperator::Negation => Ok(Object::bool_as_obj(!inner.is_truthy())),
+            UnaryOperator::Negation => Ok(Object::new_bool(!inner.is_truthy())),
         }
     }
 
@@ -237,22 +238,22 @@ impl Interpreter {
         };
 
         match operator {
-            BinaryOperator::Equals => Ok(Object::bool_as_obj(left_value == right_value)),
-            BinaryOperator::NotEquals => Ok(Object::bool_as_obj(left_value != right_value)),
+            BinaryOperator::Equals => Ok(Object::new_bool(left_value == right_value)),
+            BinaryOperator::NotEquals => Ok(Object::new_bool(left_value != right_value)),
             BinaryOperator::Less => match (left_value, right_value) {
-                (Object::Number(l), Object::Number(r)) => Ok(Object::bool_as_obj(l < r)),
+                (Object::Number(l), Object::Number(r)) => Ok(Object::new_bool(l < r)),
                 _ => Err(anyhow!("Binary '<' can only be applied to numbers")),
             },
             BinaryOperator::LessEqual => match (left_value, right_value) {
-                (Object::Number(l), Object::Number(r)) => Ok(Object::bool_as_obj(l <= r)),
+                (Object::Number(l), Object::Number(r)) => Ok(Object::new_bool(l <= r)),
                 _ => Err(anyhow!("Binary '<=' can only be applied to numbers")),
             },
             BinaryOperator::Greater => match (left_value, right_value) {
-                (Object::Number(l), Object::Number(r)) => Ok(Object::bool_as_obj(l > r)),
+                (Object::Number(l), Object::Number(r)) => Ok(Object::new_bool(l > r)),
                 _ => Err(anyhow!("Binary '>' can only be applied to numbers")),
             },
             BinaryOperator::GreaterEqual => match (left_value, right_value) {
-                (Object::Number(l), Object::Number(r)) => Ok(Object::bool_as_obj(l >= r)),
+                (Object::Number(l), Object::Number(r)) => Ok(Object::new_bool(l >= r)),
                 _ => Err(anyhow!("Binary '>=' can only be applied to numbers")),
             },
             BinaryOperator::Plus => match (left_value, right_value) {
@@ -288,7 +289,7 @@ impl Interpreter {
 
     fn execute_identifier_expression(&mut self, name: String) -> Result<Object> {
         match self.env.get_symbol(&name) {
-            Some(Symbol::Variable(var)) => Ok(var.clone()),
+            Some(var) => Ok(var.clone()),
             None => Err(anyhow!("Undefined variable '{}'", name)),
         }
     }
@@ -302,7 +303,7 @@ impl Interpreter {
             AssignmentKind::Variable { name } => {
                 let value = self.execute_expression(value)?;
                 if let Some(symbol) = self.env.get_symbol(name) {
-                    *symbol = Symbol::Variable(value.clone());
+                    *symbol = value.clone();
                     Ok(value)
                 } else {
                     Err(anyhow!("Undefined variable '{}'", name))
@@ -470,7 +471,7 @@ mod tests {
         let program = parse_program(source, true).unwrap();
         assert_eq!(
             evaluate(program).unwrap(),
-            Object::String(String::from("right"))
+            Object::String("right".to_string())
         );
     }
 

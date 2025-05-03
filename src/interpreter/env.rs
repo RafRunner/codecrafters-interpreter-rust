@@ -5,9 +5,9 @@ use replace_with::replace_with_or_abort;
 use super::object::Object;
 
 #[derive(Debug)]
-pub(super) struct Env {
+pub struct Env {
     parent: Option<Box<Env>>,
-    symbols: HashMap<String, Symbol>,
+    symbols: HashMap<String, Object>,
 }
 
 impl Env {
@@ -18,14 +18,14 @@ impl Env {
         }
     }
 
-    pub fn get_symbol(&mut self, identifier: &str) -> Option<&mut Symbol> {
+    pub fn get_symbol(&mut self, identifier: &str) -> Option<&mut Object> {
         self.symbols
             .get_mut(identifier)
             .or_else(|| self.parent.as_mut()?.get_symbol(identifier))
     }
 
-    pub fn insert_symbol(&mut self, identifier: String, symbol: Symbol) {
-        self.symbols.insert(identifier, symbol);
+    pub fn insert_symbol(&mut self, identifier: &str, symbol: Object) {
+        self.symbols.insert(identifier.to_owned(), symbol);
     }
 
     pub fn enter_scope(&mut self) {
@@ -46,9 +46,4 @@ impl Default for Env {
     fn default() -> Self {
         Self::new()
     }
-}
-
-#[derive(Debug)]
-pub(super) enum Symbol {
-    Variable(Object),
 }

@@ -6,8 +6,8 @@ use std::{
 
 use crate::{
     ast::{
-        AssignmentKind, Expression, ExpressionType, IdentifierStruct, LiteralExpression, Program,
-        Statement, StatementType,
+        AssignmentKind, DeclaraionStatement, Expression, ExpressionType, FunctionDeclarationStruct,
+        IdentifierStruct, LiteralExpression, Program, Statement, StatementType,
     },
     lexer::{Lexer, LexerIterator},
     token::{Token, TokenError, TokenType},
@@ -29,8 +29,12 @@ pub fn parse_program(
  *
  * program        -> declaration* EOF ;
  *
- * declaration    -> varDecl
+ * declaration    -> funDecl
+ *                 | varDecl
  *                 | statement ;
+ * funDecl        -> "fun" function ;
+ * function       -> IDENTIFIER "(" parameters? ")" blockStmt ;
+ * parameters     -> IDENTIFIER ( "," IDENTIFIER )* ;
  * varDecl        -> "var" IDENTIFIER ( "=" expression )? ";" ;
  *
  * statement      -> exprStmt
@@ -95,8 +99,37 @@ impl<'a> Parser<'a> {
     fn parse_declaration(&mut self, token: Token) -> Result<Statement, ParserOrTokenError> {
         match &token.kind {
             TokenType::Var => self.parse_variable_statement(token),
+            TokenType::Fun => self.parse_function_statement(token),
             _ => self.parse_statement(token),
         }
+    }
+
+    fn parse_function_statement(&mut self, token: Token) -> Result<Statement, ParserOrTokenError> {
+        let identifier = self.advance_expecting(&token, TokenType::Identifier, |next| {
+            ParserErrorType::IdentifierExpected {
+                found: next.clone(),
+            }
+        })?;
+
+        let open_paren = self.advance_expecting_dft(&identifier, TokenType::LeftParen)?;
+
+        let parameters = self.parse_parameters(&open_paren)?;
+
+        let next = self.advance(&open_paren)?;
+        let body = self.parse_block_statement(next)?;
+
+        Ok(Statement::new(
+            token,
+            StatementType::Declaration {
+                stmt: DeclaraionStatement::FunctionDeclaration(FunctionDeclarationStruct {
+                    identifier: IdentifierStruct {
+                        name: identifier.lexeme,
+                    },
+                    params: parameters,
+                    body: Box::new(body),
+                }),
+            },
+        ))
     }
 
     fn parse_variable_statement(&mut self, token: Token) -> Result<Statement, ParserOrTokenError> {
@@ -456,6 +489,49 @@ impl<'a> Parser<'a> {
         Ok(primary)
     }
 
+    fn parse_parameters(
+        &mut self,
+        prev_token: &Token,
+    ) -> Result<Vec<IdentifierStruct>, ParserOrTokenError> {
+        let mut params = Vec::new();
+        let mut prev_token = prev_token.clone();
+
+        loop {
+            let next = self.advance(&prev_token)?;
+            prev_token = next.clone();
+
+            match next.kind {
+                TokenType::RightParen => break,
+                TokenType::Identifier => {
+                    if params.len() >= 255 {
+                        return Err(ParserOrTokenError::Parser(ParserError::new(
+                            ParserErrorType::TooManyParameters,
+                            next,
+                        )));
+                    }
+
+                    params.push(IdentifierStruct { name: next.lexeme });
+
+                    if let Some(Ok(tok)) = self.lexer.peek() {
+                        if tok.kind == TokenType::Comma {
+                            self.lexer.next().unwrap().unwrap();
+                        }
+                    }
+                }
+                _ => {
+                    return Err(ParserOrTokenError::Parser(ParserError::new(
+                        ParserErrorType::UnexpectedToken {
+                            token: next.lexeme.clone(),
+                        },
+                        next,
+                    )))
+                }
+            }
+        }
+
+        Ok(params)
+    }
+
     fn parse_arguments(
         &mut self,
         prev_token: &Token,
@@ -688,6 +764,9 @@ pub enum ParserErrorType {
 
     #[error("Can't have more than 255 arguments.")]
     TooManyArguments,
+
+    #[error("Can't have more than 255 parameters.")]
+    TooManyParameters,
 
     #[error("Unexpected end of file")]
     UnexpectedEof,
