@@ -1,4 +1,8 @@
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::{
+    cell::RefCell,
+    rc::Rc,
+    time::{SystemTime, UNIX_EPOCH},
+};
 
 use crate::ast::{
     AssignmentKind, BinaryOperator, DeclaraionStatement, Expression, ExpressionType,
@@ -11,8 +15,7 @@ use super::{env::Env, object::Object};
 
 #[derive(Debug)]
 pub struct Interpreter {
-    // TODO just a temp env to pass the first stage
-    pub env: Env,
+    pub env: Rc<RefCell<Env>>,
 }
 
 impl Default for Interpreter {
@@ -24,7 +27,7 @@ impl Default for Interpreter {
 impl Interpreter {
     pub fn new() -> Self {
         let mut env = Env::new();
-        env.insert_symbol(
+        env.define(
             "clock",
             Object::new_native_fn("clock", 0, |_, _| {
                 let timestamp = SystemTime::now()
@@ -34,12 +37,14 @@ impl Interpreter {
                 Ok(Object::Number(timestamp as f64))
             }),
         );
-        env.insert_symbol(
+        env.define(
             "str",
             Object::new_native_fn("str", 1, |_, args| Ok(Object::String(args[0].to_string()))),
         );
 
-        Self { env }
+        Self {
+            env: Rc::new(RefCell::new(env)),
+        }
     }
 
     pub fn evaluate(&mut self, program: Program) -> Result<Object> {
@@ -97,7 +102,7 @@ impl Interpreter {
                 } else {
                     Object::Nil
                 };
-                self.env.insert_symbol(&identifier.name, value);
+                self.env.borrow_mut().define(&identifier.name, value);
             }
             DeclaraionStatement::FunctionDeclaration(FunctionDeclarationStruct {
                 identifier,
@@ -111,7 +116,7 @@ impl Interpreter {
                     body.clone(), // Use body.clone() which is already a Box<Statement>
                 );
 
-                self.env.insert_symbol(&identifier.name, user_fn);
+                self.env.borrow_mut().define(&identifier.name, user_fn);
             }
         }
 
@@ -119,9 +124,10 @@ impl Interpreter {
     }
 
     fn execute_block_statement(&mut self, stmts: &[Statement]) -> Result<Object> {
-        self.env.enter_scope();
+        let previous_env = Rc::clone(&self.env);
+        self.env = Env::new_from_parent(&previous_env);
         let result = self.evaluate_statements(stmts);
-        self.env.exit_scope();
+        self.env = previous_env;
         result
     }
 
@@ -149,7 +155,7 @@ impl Interpreter {
 
         while self.execute_expression(condition)?.is_truthy() {
             return_value = self.execute_statement(body)?;
-            
+
             // Break the loop if we encounter a return statement
             if matches!(return_value, Object::Return(_)) {
                 break;
@@ -313,8 +319,8 @@ impl Interpreter {
     }
 
     fn execute_identifier_expression(&mut self, name: String) -> Result<Object> {
-        match self.env.get_symbol(&name) {
-            Some(var) => Ok(var.clone()),
+        match self.env.borrow().get_symbol(&name) {
+            Some(var) => Ok(var),
             None => Err(anyhow!("Undefined variable '{}'", name)),
         }
     }
@@ -327,12 +333,8 @@ impl Interpreter {
         match kind {
             AssignmentKind::Variable { name } => {
                 let value = self.execute_expression(value)?;
-                if let Some(symbol) = self.env.get_symbol(name) {
-                    *symbol = value.clone();
-                    Ok(value)
-                } else {
-                    Err(anyhow!("Undefined variable '{}'", name))
-                }
+                self.env.borrow_mut().assign(name, value.clone())?;
+                Ok(value)
             }
         }
     }
@@ -541,7 +543,7 @@ mod tests {
 
         for (; i < 10;) {
             a = a + i;
-            i = i + 1
+            i = i + 1;
         }
         a
         ";
@@ -695,7 +697,7 @@ mod tests {
         let program = parse_program(source, true).unwrap();
         let result = evaluate(program).unwrap();
         assert_eq!(result, Object::String("from_if".to_string()));
-        
+
         let source = r#"
         fun testIfReturn(condition) {
             if (condition) {
@@ -735,7 +737,7 @@ mod tests {
         let program = parse_program(source, true).unwrap();
         let result = evaluate(program).unwrap();
         assert_eq!(result, Object::String("while_returned_at_5".to_string()));
-        
+
         // Test return at the end of a while loop
         let source = r#"
         fun testWhileReturn(n) {
@@ -776,7 +778,7 @@ mod tests {
         let program = parse_program(source, true).unwrap();
         let result = evaluate(program).unwrap();
         assert_eq!(result, Object::String("for_returned_at_3".to_string()));
-        
+
         // Test return at the end of a for loop
         let source = r#"
         fun testForReturn(n) {
@@ -829,7 +831,7 @@ mod tests {
         let program = parse_program(source, true).unwrap();
         let result = evaluate(program).unwrap();
         assert_eq!(result, Object::String("nested_return_at_7".to_string()));
-        
+
         let source = r#"
         fun testNestedReturn(n) {
             var result = "start";

@@ -5,7 +5,7 @@ use std::{
 
 use crate::ast::{IdentifierStruct, Statement};
 
-use super::evaluator::Interpreter;
+use super::{env::Env, evaluator::Interpreter};
 
 // Define a trait for callable functions
 pub trait Callable: Debug + Display + 'static {
@@ -76,11 +76,14 @@ impl LoxFunction {
 
 impl Callable for LoxFunction {
     fn call(&self, interpreter: &mut Interpreter, args: &[Object]) -> anyhow::Result<Object> {
-        interpreter.env.enter_scope();
+        let previous = Rc::clone(&interpreter.env);
+        let env = Env::new_from_parent(&interpreter.env);
 
         for (param, arg) in self.params.iter().zip(args) {
-            interpreter.env.insert_symbol(&param.name, arg.clone());
+            env.borrow_mut().define(&param.name, arg.clone());
         }
+
+        interpreter.env = env;
 
         let result = match interpreter.execute_statement(&self.body)? {
             // If we get a return object, extract its value
@@ -89,7 +92,8 @@ impl Callable for LoxFunction {
             other => other,
         };
 
-        interpreter.env.exit_scope();
+        // Restore the previous environment
+        interpreter.env = previous;
         Ok(result)
     }
 
