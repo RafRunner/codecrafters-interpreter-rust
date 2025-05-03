@@ -1,4 +1,5 @@
 use std::{
+    cell::RefCell,
     fmt::{Debug, Display, Formatter},
     rc::Rc,
 };
@@ -62,14 +63,21 @@ pub struct LoxFunction {
     name: String,
     params: Vec<IdentifierStruct>,
     body: Box<Statement>,
+    closure: Rc<RefCell<Env>>,
 }
 
 impl LoxFunction {
-    pub fn new(name: &str, params: Vec<IdentifierStruct>, body: Box<Statement>) -> Self {
+    pub fn new(
+        name: &str,
+        params: Vec<IdentifierStruct>,
+        body: Box<Statement>,
+        closure: Rc<RefCell<Env>>,
+    ) -> Self {
         Self {
             name: name.to_owned(),
             params,
             body,
+            closure,
         }
     }
 }
@@ -77,7 +85,7 @@ impl LoxFunction {
 impl Callable for LoxFunction {
     fn call(&self, interpreter: &mut Interpreter, args: &[Object]) -> anyhow::Result<Object> {
         let previous = Rc::clone(&interpreter.env);
-        let env = Env::new_from_parent(&interpreter.env);
+        let env = Env::new_from_parent(&self.closure);
 
         for (param, arg) in self.params.iter().zip(args) {
             env.borrow_mut().define(&param.name, arg.clone());
@@ -88,8 +96,8 @@ impl Callable for LoxFunction {
         let result = match interpreter.execute_statement(&self.body)? {
             // If we get a return object, extract its value
             Object::Return(value) => *value,
-            // Otherwise, return the value directly
-            other => other,
+            // Otherwise, return nil
+            _ => Object::Nil,
         };
 
         // Restore the previous environment
@@ -142,8 +150,18 @@ impl Object {
         Self::Function(Rc::new(NativeFunction::new(name, arity, func)))
     }
 
-    pub fn new_user_fn(name: &str, params: Vec<IdentifierStruct>, body: Box<Statement>) -> Self {
-        Self::Function(Rc::new(LoxFunction::new(name, params, body)))
+    pub fn new_user_fn(
+        name: &str,
+        params: Vec<IdentifierStruct>,
+        body: Box<Statement>,
+        closure: &Rc<RefCell<Env>>,
+    ) -> Self {
+        Self::Function(Rc::new(LoxFunction::new(
+            name,
+            params,
+            body,
+            Rc::clone(closure),
+        )))
     }
 
     pub fn is_truthy(&self) -> bool {

@@ -110,11 +110,8 @@ impl Interpreter {
                 body,
             }) => {
                 // Create a new user function by passing the parameters and body directly
-                let user_fn = Object::new_user_fn(
-                    &identifier.name,
-                    params.clone(),
-                    body.clone(), // Use body.clone() which is already a Box<Statement>
-                );
+                let user_fn =
+                    Object::new_user_fn(&identifier.name, params.clone(), body.clone(), &self.env);
 
                 self.env.borrow_mut().define(&identifier.name, user_fn);
             }
@@ -192,26 +189,7 @@ impl Interpreter {
                 self.execute_assignment_expression(kind, value)
             }
             ExpressionType::Call { calee, arguments } => {
-                let callee = self.execute_expression(calee)?;
-
-                let mut args = Vec::new();
-                for arg in arguments {
-                    args.push(self.execute_expression(arg)?);
-                }
-
-                match callee {
-                    Object::Function(callable) => {
-                        if args.len() != callable.arity() {
-                            return Err(anyhow!(
-                                "Expected {} arguments but got {}.",
-                                callable.arity(),
-                                args.len()
-                            ));
-                        }
-                        callable.call(self, &args)
-                    }
-                    _ => Err(anyhow!("Can only call functions and classes.")),
-                }
+                self.execute_call_expression(calee, arguments)
             }
         }
     }
@@ -336,6 +314,33 @@ impl Interpreter {
                 self.env.borrow_mut().assign(name, value.clone())?;
                 Ok(value)
             }
+        }
+    }
+
+    fn execute_call_expression(
+        &mut self,
+        calee: &Box<Expression>,
+        arguments: &Vec<Expression>,
+    ) -> std::result::Result<Object, anyhow::Error> {
+        let callee = self.execute_expression(calee)?;
+
+        let mut args = Vec::new();
+        for arg in arguments {
+            args.push(self.execute_expression(arg)?);
+        }
+
+        match callee {
+            Object::Function(callable) => {
+                if args.len() != callable.arity() {
+                    return Err(anyhow!(
+                        "Expected {} arguments but got {}.",
+                        callable.arity(),
+                        args.len()
+                    ));
+                }
+                callable.call(self, &args)
+            }
+            _ => Err(anyhow!("Can only call functions and classes.")),
         }
     }
 }
