@@ -39,6 +39,7 @@ pub fn parse_program(
  *
  * statement      -> exprStmt
  *                 | ifStmt
+ *                 | returnStmt
  *                 | printStmt
  *                 | whileStmt
  *                 | forStmt
@@ -46,6 +47,7 @@ pub fn parse_program(
  * exprStmt       -> expression ";" ;
  * ifStmt         -> "if" "(" expression ")" statement
  *                   ( "else" statement)? ;
+ * returnStmt     -> "return" expression? ";" ;
  * printStmt      -> "print" expression ";" ;
  * whileStmt      -> "while" "(" expression ")" statement ;
  * forStmt        -> "for" "(" ( varDecl | exprStmt | ";" )
@@ -169,6 +171,7 @@ impl<'a> Parser<'a> {
             TokenType::Print => self.parse_print_statement(token),
             TokenType::LeftBrace => self.parse_block_statement(token),
             TokenType::If => self.parse_if_statement(token),
+            TokenType::Return => self.parse_return_statement(token),
             TokenType::While => self.parse_while_statement(token),
             TokenType::For => self.parse_for_statement(token),
             _ => self.parse_expression_statement(token),
@@ -241,6 +244,22 @@ impl<'a> Parser<'a> {
                 then: Box::new(then),
                 else_block,
             },
+        ))
+    }
+
+    fn parse_return_statement(&mut self, token: Token) -> Result<Statement, ParserOrTokenError> {
+        let next = self.advance(&token)?;
+        let expression = if next.kind == TokenType::Semicolon {
+            None
+        } else {
+            let expr = self.parse_expression(next.clone())?;
+            self.expect_semi(&expr.token)?;
+            Some(expr)
+        };
+
+        Ok(Statement::new(
+            token,
+            StatementType::Return { expr: expression },
         ))
     }
 

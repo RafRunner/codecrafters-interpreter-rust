@@ -42,38 +42,44 @@ impl Interpreter {
         Self { env }
     }
 
-    pub fn evaluate(&mut self, program: Program) -> Result<Option<Object>> {
+    pub fn evaluate(&mut self, program: Program) -> Result<Object> {
         self.evaluate_statements(&program.statements)
     }
 
-    fn evaluate_statements(&mut self, statements: &[Statement]) -> Result<Option<Object>> {
-        let mut output = None;
+    fn evaluate_statements(&mut self, statements: &[Statement]) -> Result<Object> {
+        let mut output = Object::Nil;
 
         for stmt in statements {
             output = self.execute_statement(stmt)?;
+
+            // If we encounter a return statement, propagate it upward
+            if matches!(output, Object::Return(_)) {
+                break;
+            }
         }
 
         Ok(output)
     }
 
-    pub fn execute_statement(&mut self, stmt: &Statement) -> Result<Option<Object>> {
+    pub fn execute_statement(&mut self, stmt: &Statement) -> Result<Object> {
         match &stmt.kind {
-            StatementType::Expression { expr } => Ok(Some(self.execute_expression(expr)?)),
-            StatementType::Print { expr } => self.execute_print_statement(expr).map(|_| None),
-            StatementType::Declaration { stmt } => {
-                self.execute_declaration_statement(stmt).map(|_| None)
+            StatementType::Expression { expr } => self.execute_expression(expr),
+            StatementType::Print { expr } => {
+                self.execute_print_statement(expr).map(|_| Object::Nil)
             }
+            StatementType::Declaration { stmt } => self
+                .execute_declaration_statement(stmt)
+                .map(|_| Object::Nil),
             StatementType::Block { stmts } => self.execute_block_statement(stmts),
             StatementType::If {
                 condition,
                 then,
                 else_block,
-            } => self
-                .execute_if_statement(condition, then, else_block.as_deref())
-                .map(|_| None),
+            } => self.execute_if_statement(condition, then, else_block.as_deref()),
             StatementType::While { condition, body } => {
-                self.execute_while_statement(condition, body).map(|_| None)
+                self.execute_while_statement(condition, body)
             }
+            StatementType::Return { expr } => self.execute_return_statement(expr.as_ref()),
         }
     }
 
@@ -112,7 +118,7 @@ impl Interpreter {
         Ok(())
     }
 
-    fn execute_block_statement(&mut self, stmts: &[Statement]) -> Result<Option<Object>> {
+    fn execute_block_statement(&mut self, stmts: &[Statement]) -> Result<Object> {
         self.env.enter_scope();
         let result = self.evaluate_statements(stmts);
         self.env.exit_scope();
@@ -124,22 +130,41 @@ impl Interpreter {
         condition: &Expression,
         then: &Statement,
         else_block: Option<&Statement>,
-    ) -> Result<()> {
+    ) -> Result<Object> {
         if self.execute_expression(condition)?.is_truthy() {
-            self.execute_statement(then)?;
+            self.execute_statement(then)
         } else if let Some(else_block) = else_block {
-            self.execute_statement(else_block)?;
+            self.execute_statement(else_block)
+        } else {
+            Ok(Object::Nil)
         }
-
-        Ok(())
     }
 
-    fn execute_while_statement(&mut self, condition: &Expression, body: &Statement) -> Result<()> {
+    fn execute_while_statement(
+        &mut self,
+        condition: &Expression,
+        body: &Statement,
+    ) -> Result<Object> {
+        let mut return_value = Object::Nil;
+
         while self.execute_expression(condition)?.is_truthy() {
-            self.execute_statement(body)?;
+            return_value = self.execute_statement(body)?;
+            
+            // Break the loop if we encounter a return statement
+            if matches!(return_value, Object::Return(_)) {
+                break;
+            }
         }
 
-        Ok(())
+        Ok(return_value)
+    }
+
+    fn execute_return_statement(&mut self, expr: Option<&Expression>) -> Result<Object> {
+        let value = match expr {
+            Some(e) => self.execute_expression(e)?,
+            None => Object::Nil,
+        };
+        Ok(Object::Return(Box::new(value)))
     }
 
     fn execute_expression(&mut self, expression: &Expression) -> Result<Object> {
@@ -320,7 +345,7 @@ mod tests {
     use super::*;
 
     fn evaluate(program: Program) -> Result<Object> {
-        Interpreter::new().evaluate(program).map(|res| res.unwrap())
+        Interpreter::new().evaluate(program)
     }
 
     #[test]
@@ -599,5 +624,241 @@ mod tests {
         let program = parse_program(source, true).unwrap();
         let result = evaluate(program).unwrap();
         assert_eq!(result, Object::String("hello123".to_string()));
+    }
+
+    #[test]
+    fn test_basic_function_return() {
+        // Test a simple function with a return value
+        let source = r#"
+        fun add(a, b) {
+            return a + b;
+        }
+        
+        add(5, 3)
+        "#;
+
+        let program = parse_program(source, true).unwrap();
+        let result = evaluate(program).unwrap();
+        assert_eq!(result, Object::Number(8.0));
+    }
+
+    #[test]
+    fn test_early_return() {
+        // Test that code after a return statement is not executed
+        let source = r#"
+        fun earlyReturn() {
+            return "early";
+            print "This should not be printed";
+            return "late";
+        }
+        
+        earlyReturn()
+        "#;
+
+        let program = parse_program(source, true).unwrap();
+        let result = evaluate(program).unwrap();
+        assert_eq!(result, Object::String("early".to_string()));
+    }
+
+    #[test]
+    fn test_implicit_nil_return() {
+        // Test that functions without explicit return statements return nil
+        let source = r#"
+        fun noReturn() {
+            print "No explicit return";
+        }
+        
+        noReturn()
+        "#;
+
+        let program = parse_program(source, true).unwrap();
+        let result = evaluate(program).unwrap();
+        assert_eq!(result, Object::Nil);
+    }
+
+    #[test]
+    fn test_return_in_if_statement() {
+        // Test return in if/else branches
+        let source = r#"
+        fun testIfReturn(condition) {
+            if (condition) {
+                return "from_if";
+            } else {
+                return "from_else";
+            }
+            return "never_reaches_here";
+        }
+        
+        testIfReturn(true)
+        "#;
+
+        let program = parse_program(source, true).unwrap();
+        let result = evaluate(program).unwrap();
+        assert_eq!(result, Object::String("from_if".to_string()));
+        
+        let source = r#"
+        fun testIfReturn(condition) {
+            if (condition) {
+                return "from_if";
+            } else {
+                return "from_else";
+            }
+            return "never_reaches_here";
+        }
+        
+        testIfReturn(false)
+        "#;
+
+        let program = parse_program(source, true).unwrap();
+        let result = evaluate(program).unwrap();
+        assert_eq!(result, Object::String("from_else".to_string()));
+    }
+
+    #[test]
+    fn test_return_in_while_loop() {
+        // Test early return from a while loop
+        let source = r#"
+        fun testWhileReturn(n) {
+            var i = 0;
+            while (i < 10) {
+                if (i == n) {
+                    return "while_returned_at_" + str(i);
+                }
+                i = i + 1;
+            }
+            return "while_completed";
+        }
+        
+        testWhileReturn(5)
+        "#;
+
+        let program = parse_program(source, true).unwrap();
+        let result = evaluate(program).unwrap();
+        assert_eq!(result, Object::String("while_returned_at_5".to_string()));
+        
+        // Test return at the end of a while loop
+        let source = r#"
+        fun testWhileReturn(n) {
+            var i = 0;
+            while (i < 10) {
+                if (i == n) {
+                    return "while_returned_at_" + str(i);
+                }
+                i = i + 1;
+            }
+            return "while_completed";
+        }
+        
+        testWhileReturn(20)
+        "#;
+
+        let program = parse_program(source, true).unwrap();
+        let result = evaluate(program).unwrap();
+        assert_eq!(result, Object::String("while_completed".to_string()));
+    }
+
+    #[test]
+    fn test_return_in_for_loop() {
+        // Test early return from a for loop
+        let source = r#"
+        fun testForReturn(n) {
+            for (var i = 0; i < 10; i = i + 1) {
+                if (i == n) {
+                    return "for_returned_at_" + str(i);
+                }
+            }
+            return "for_completed";
+        }
+        
+        testForReturn(3)
+        "#;
+
+        let program = parse_program(source, true).unwrap();
+        let result = evaluate(program).unwrap();
+        assert_eq!(result, Object::String("for_returned_at_3".to_string()));
+        
+        // Test return at the end of a for loop
+        let source = r#"
+        fun testForReturn(n) {
+            for (var i = 0; i < 10; i = i + 1) {
+                if (i == n) {
+                    return "for_returned_at_" + str(i);
+                }
+            }
+            return "for_completed";
+        }
+        
+        testForReturn(20)
+        "#;
+
+        let program = parse_program(source, true).unwrap();
+        let result = evaluate(program).unwrap();
+        assert_eq!(result, Object::String("for_completed".to_string()));
+    }
+
+    #[test]
+    fn test_return_in_nested_blocks() {
+        // Test return in deeply nested blocks and control structures
+        let source = r#"
+        fun testNestedReturn(n) {
+            var result = "start";
+            {
+                if (n > 5) {
+                    {
+                        while (n > 0) {
+                            if (n == 7) {
+                                return "nested_return_at_" + str(n);
+                            }
+                            n = n - 1;
+                        }
+                    }
+                } else {
+                    for (var i = 0; i < n; i = i + 1) {
+                        if (i == 3) {
+                            return "nested_loop_return";
+                        }
+                    }
+                }
+            }
+            return "no_early_return";
+        }
+        
+        testNestedReturn(7)
+        "#;
+
+        let program = parse_program(source, true).unwrap();
+        let result = evaluate(program).unwrap();
+        assert_eq!(result, Object::String("nested_return_at_7".to_string()));
+        
+        let source = r#"
+        fun testNestedReturn(n) {
+            var result = "start";
+            {
+                if (n > 5) {
+                    {
+                        while (n > 0) {
+                            if (n == 7) {
+                                return "nested_return_at_" + str(n);
+                            }
+                            n = n - 1;
+                        }
+                    }
+                } else {
+                    for (var i = 0; i < n; i = i + 1) {
+                        if (i == 3) {
+                            return "nested_loop_return";
+                        }
+                    }
+                }
+            }
+            return "no_early_return";
+        }
+        
+        testNestedReturn(2)
+        "#;
+
+        let program = parse_program(source, true).unwrap();
+        let result = evaluate(program).unwrap();
+        assert_eq!(result, Object::String("no_early_return".to_string()));
     }
 }

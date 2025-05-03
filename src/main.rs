@@ -56,12 +56,11 @@ fn main() {
             let mut interpreter = Interpreter::new();
 
             match interpreter.evaluate(program) {
-                Ok(Some(result)) => {
+                Ok(result) => {
                     if command == "evaluate" {
                         println!("{}", result);
                     }
                 }
-                Ok(None) => {}
                 Err(e) => {
                     eprintln!("{}", e);
                     std::process::exit(70);

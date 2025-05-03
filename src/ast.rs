@@ -124,6 +124,15 @@ impl Display for Statement {
             StatementType::While { condition, body } => {
                 write!(f, "while ({}) {{\n{}}}", condition, body)
             }
+            StatementType::Return { expr: value } => write!(
+                f,
+                "return {}",
+                if let Some(value) = value {
+                    value.to_string()
+                } else {
+                    "nil".to_string()
+                }
+            ),
         }
     }
 }
@@ -150,6 +159,9 @@ pub enum StatementType {
         condition: Expression,
         then: Box<Statement>,
         else_block: Option<Box<Statement>>,
+    },
+    Return {
+        expr: Option<Expression>,
     },
 }
 

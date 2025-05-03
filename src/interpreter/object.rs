@@ -83,8 +83,10 @@ impl Callable for LoxFunction {
         }
 
         let result = match interpreter.execute_statement(&self.body)? {
-            Some(obj) => obj,
-            None => Object::Nil,
+            // If we get a return object, extract its value
+            Object::Return(value) => *value,
+            // Otherwise, return the value directly
+            other => other,
         };
 
         interpreter.env.exit_scope();
@@ -114,6 +116,9 @@ pub enum Object {
     Number(f64),
     String(String),
     Function(Rc<dyn Callable>),
+
+    // Internal Objects
+    Return(Box<Object>),
 }
 
 impl Object {
@@ -157,6 +162,7 @@ impl Display for Object {
             }
             Self::String(s) => write!(f, "{}", s),
             Self::Function(fun) => Display::fmt(fun, f),
+            Self::Return(obj) => write!(f, "<return {}>", obj),
         }
     }
 }
