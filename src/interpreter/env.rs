@@ -5,7 +5,7 @@ use std::rc::Rc;
 
 use super::object::Object;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Env {
     parent: Option<Rc<RefCell<Env>>>,
     symbols: HashMap<String, Object>,
@@ -45,45 +45,20 @@ impl Env {
     }
 
     pub fn assign(&mut self, identifier: &str, symbol: Object) -> anyhow::Result<()> {
-        let depth = self.find_definition(identifier);
-        match depth {
-            Some(depth) => {
-                self.assing_at_depth(identifier, symbol, depth);
-                Ok(())
-            }
-            None => Err(anyhow::anyhow!("Undefined variable '{}'", identifier)),
+        if let Some(existing_symbol) = self.symbols.get_mut(identifier) {
+            *existing_symbol = symbol;
+            return Ok(());
         }
+
+        if let Some(parent) = &self.parent {
+            return parent.borrow_mut().assign(identifier, symbol);
+        }
+
+        Err(anyhow::anyhow!("Symbol {} not found", identifier))
     }
 
     pub fn get_parent(&self) -> Option<Rc<RefCell<Env>>> {
         self.parent.as_ref().map(Rc::clone)
-    }
-
-    fn find_definition(&self, identifier: &str) -> Option<usize> {
-        if self.symbols.contains_key(identifier) {
-            return Some(0);
-        }
-
-        if let Some(parent) = &self.parent {
-            if let Some(depth) = parent.borrow().find_definition(identifier) {
-                return Some(depth + 1);
-            }
-        }
-
-        None
-    }
-
-    /// Depth needs to be checked before calling this function
-    fn assing_at_depth(&mut self, identifier: &str, symbol: Object, depth: usize) {
-        if depth == 0 {
-            self.symbols.insert(identifier.to_owned(), symbol);
-        } else {
-            self.parent.as_ref().unwrap().borrow_mut().assing_at_depth(
-                identifier,
-                symbol,
-                depth - 1,
-            )
-        }
     }
 }
 
@@ -95,14 +70,12 @@ impl Default for Env {
 
 impl Display for Env {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "Env {{ symbols: {} }}",
-            self.symbols
-                .iter()
-                .map(|(k, v)| format!("{}: {}", k, v))
-                .collect::<Vec<_>>()
-                .join(", ")
-        )
+        for (key, value) in &self.symbols {
+            writeln!(f, "{}: {}", key, value)?;
+        }
+        if let Some(parent) = &self.parent {
+            Display::fmt(&parent.borrow(), f)?;
+        }
+        Ok(())
     }
 }

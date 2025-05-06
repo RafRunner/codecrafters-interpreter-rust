@@ -16,7 +16,7 @@ pub trait Callable: Debug + Display + 'static {
 }
 
 // Native function implementation
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct NativeFunction {
     name: String,
     arity: usize,
@@ -58,7 +58,7 @@ impl Display for NativeFunction {
 }
 
 // User-defined function that captures parameters and body
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct LoxFunction {
     name: String,
     params: Vec<IdentifierStruct>,
@@ -129,8 +129,11 @@ pub enum Object {
     String(String),
     Function(Rc<dyn Callable>),
 
-    // Internal Objects
+    // Internal Objects. Cannot be stored in variables. They are a implementation detail of the interpreter.
+    /// Represents a return value from a function
     Return(Box<Object>),
+    /// Represents an empty value that is returned by statements, like `if` and `while`
+    Unit,
 }
 
 impl Object {
@@ -154,13 +157,13 @@ impl Object {
         name: &str,
         params: Vec<IdentifierStruct>,
         body: Box<Statement>,
-        closure: &Rc<RefCell<Env>>,
+        closure: Env,
     ) -> Self {
         Self::Function(Rc::new(LoxFunction::new(
             name,
             params,
             body,
-            Rc::clone(closure),
+            Rc::new(RefCell::new(closure)),
         )))
     }
 
@@ -185,6 +188,7 @@ impl Display for Object {
             Self::String(s) => write!(f, "{}", s),
             Self::Function(fun) => Display::fmt(fun, f),
             Self::Return(obj) => write!(f, "<return {}>", obj),
+            Self::Unit => write!(f, "<unit>"),
         }
     }
 }

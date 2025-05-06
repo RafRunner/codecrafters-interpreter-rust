@@ -349,17 +349,15 @@ impl<'a> Parser<'a> {
         }
 
         // 2. Create the while loop (condition defaults to true if omitted).
-        let condition_expr = condition.unwrap_or_else(|| {
-            Expression::literal(
-                Token::genereted(TokenType::True, "true"),
-                LiteralExpression::True,
-            )
-        });
-
         let while_stmt = Statement::new(
             token.clone(),
             StatementType::While {
-                condition: condition_expr,
+                condition: condition.unwrap_or_else(|| {
+                    Expression::literal(
+                        Token::genereted(TokenType::True, "true"),
+                        LiteralExpression::True,
+                    )
+                }),
                 body: Box::new(body),
             },
         );
@@ -469,7 +467,7 @@ impl<'a> Parser<'a> {
 
     fn parse_unary(&mut self, token: Token) -> Result<Expression, ParserOrTokenError> {
         if matches!(token.kind, TokenType::Bang | TokenType::Minus) {
-            let operator = token.kind.props().2.unwrap();
+            let operator = token.kind.unary_operator().unwrap();
             let next_token = self.advance(&token)?;
             let unary = self.parse_unary(next_token)?;
 
@@ -658,7 +656,7 @@ impl<'a> Parser<'a> {
         while let Some(Ok(tok)) = self.lexer.peek() {
             if operators.contains(&tok.kind) {
                 let operation = self.lexer.next().unwrap().unwrap();
-                let operator = operation.kind.props().1.unwrap();
+                let operator = operation.kind.binary_operator().unwrap();
                 let right = self
                     .advance(&operation)
                     .and_then(|next_token| parse_lower(self, next_token))?;

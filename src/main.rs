@@ -52,12 +52,13 @@ fn main() {
             }
         }
         "evaluate" | "run" => {
-            let program = parse_program_or_exit(&file_contents, command == "evaluate");
-            let mut interpreter = Interpreter::new();
+            let evaluate = command == "evaluate";
+            let program = parse_program_or_exit(&file_contents, evaluate);
+            let mut interpreter = Interpreter::new(evaluate);
 
             match interpreter.evaluate(program) {
                 Ok(result) => {
-                    if command == "evaluate" {
+                    if evaluate {
                         println!("{}", result);
                     }
                 }

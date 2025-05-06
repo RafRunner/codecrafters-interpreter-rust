@@ -56,7 +56,7 @@ pub enum TokenType {
 }
 
 impl TokenType {
-    pub fn props(&self) -> (&str, Option<BinaryOperator>, Option<UnaryOperator>) {
+    fn props(&self) -> (&str, Option<BinaryOperator>, Option<UnaryOperator>) {
         match self {
             Self::LeftParen => ("LEFT_PAREN", None, None),
             Self::RightParen => ("RIGHT_PAREN", None, None),
@@ -105,6 +105,14 @@ impl TokenType {
 
     pub fn display_name(&self) -> &str {
         self.props().0
+    }
+
+    pub fn binary_operator(&self) -> Option<BinaryOperator> {
+        self.props().1
+    }
+
+    pub fn unary_operator(&self) -> Option<UnaryOperator> {
+        self.props().2
     }
 
     pub fn check_reserved_word(lexeme: &str) -> Option<Self> {

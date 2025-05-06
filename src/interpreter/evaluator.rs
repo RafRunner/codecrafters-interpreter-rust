@@ -16,16 +16,17 @@ use super::{env::Env, object::Object};
 #[derive(Debug)]
 pub struct Interpreter {
     pub env: Rc<RefCell<Env>>,
+    return_from_stetments: bool,
 }
 
 impl Default for Interpreter {
     fn default() -> Self {
-        Self::new()
+        Self::new(false)
     }
 }
 
 impl Interpreter {
-    pub fn new() -> Self {
+    pub fn new(return_from_stetments: bool) -> Self {
         let mut env = Env::new();
         env.define(
             "clock",
@@ -44,6 +45,7 @@ impl Interpreter {
 
         Self {
             env: Rc::new(RefCell::new(env)),
+            return_from_stetments,
         }
     }
 
@@ -52,13 +54,22 @@ impl Interpreter {
     }
 
     fn evaluate_statements(&mut self, statements: &[Statement]) -> Result<Object> {
-        let mut output = Object::Nil;
+        let mut output = if self.return_from_stetments {
+            Object::Nil
+        } else {
+            Object::Unit
+        };
 
         for stmt in statements {
-            output = self.execute_statement(stmt)?;
+            let result = self.execute_statement(stmt)?;
+
+            if self.return_from_stetments {
+                output = result.clone();
+            }
 
             // If we encounter a return statement, propagate it upward
-            if matches!(output, Object::Return(_)) {
+            if matches!(result, Object::Return(_)) {
+                output = result;
                 break;
             }
         }
@@ -68,13 +79,13 @@ impl Interpreter {
 
     pub fn execute_statement(&mut self, stmt: &Statement) -> Result<Object> {
         match &stmt.kind {
-            StatementType::Expression { expr } => self.execute_expression(expr),
+            StatementType::Expression { expr } => self.execute_expression_statement(expr),
             StatementType::Print { expr } => {
-                self.execute_print_statement(expr).map(|_| Object::Nil)
+                self.execute_print_statement(expr).map(|_| Object::Unit)
             }
             StatementType::Declaration { stmt } => self
                 .execute_declaration_statement(stmt)
-                .map(|_| Object::Nil),
+                .map(|_| Object::Unit),
             StatementType::Block { stmts } => self.execute_block_statement(stmts),
             StatementType::If {
                 condition,
@@ -85,6 +96,19 @@ impl Interpreter {
                 self.execute_while_statement(condition, body)
             }
             StatementType::Return { expr } => self.execute_return_statement(expr.as_ref()),
+        }
+    }
+
+    fn execute_expression_statement(
+        &mut self,
+        expr: &Expression,
+    ) -> std::result::Result<Object, anyhow::Error> {
+        let result = self.execute_expression(expr)?;
+
+        if self.return_from_stetments {
+            Ok(result)
+        } else {
+            Ok(Object::Unit)
         }
     }
 
@@ -110,8 +134,12 @@ impl Interpreter {
                 body,
             }) => {
                 // Create a new user function by passing the parameters and body directly
-                let user_fn =
-                    Object::new_user_fn(&identifier.name, params.clone(), body.clone(), &self.env);
+                let user_fn = Object::new_user_fn(
+                    &identifier.name,
+                    params.clone(),
+                    body.clone(),
+                    self.env.borrow().clone(),
+                );
 
                 self.env.borrow_mut().define(&identifier.name, user_fn);
             }
@@ -139,7 +167,7 @@ impl Interpreter {
         } else if let Some(else_block) = else_block {
             self.execute_statement(else_block)
         } else {
-            Ok(Object::Nil)
+            Ok(Object::Unit)
         }
     }
 
@@ -148,13 +176,14 @@ impl Interpreter {
         condition: &Expression,
         body: &Statement,
     ) -> Result<Object> {
-        let mut return_value = Object::Nil;
+        let mut return_value = Object::Unit;
 
         while self.execute_expression(condition)?.is_truthy() {
-            return_value = self.execute_statement(body)?;
+            let result = self.execute_statement(body)?;
 
             // Break the loop if we encounter a return statement
-            if matches!(return_value, Object::Return(_)) {
+            if matches!(result, Object::Return(_)) {
+                return_value = result;
                 break;
             }
         }
@@ -319,10 +348,10 @@ impl Interpreter {
 
     fn execute_call_expression(
         &mut self,
-        calee: &Box<Expression>,
+        callee: &Expression,
         arguments: &Vec<Expression>,
     ) -> std::result::Result<Object, anyhow::Error> {
-        let callee = self.execute_expression(calee)?;
+        let callee = self.execute_expression(callee)?;
 
         let mut args = Vec::new();
         for arg in arguments {
@@ -352,7 +381,7 @@ mod tests {
     use super::*;
 
     fn evaluate(program: Program) -> Result<Object> {
-        Interpreter::new().evaluate(program)
+        Interpreter::new(true).evaluate(program)
     }
 
     #[test]
