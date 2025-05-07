@@ -8,6 +8,22 @@ use crate::ast::{IdentifierStruct, Statement};
 
 use super::{env::Env, evaluator::Interpreter};
 
+#[derive(Debug, Clone)]
+pub enum Object {
+    True,
+    False,
+    Nil,
+    Number(f64),
+    String(String),
+    Function(Rc<dyn Callable>),
+
+    // Internal Objects. Cannot be stored in variables. They are a implementation detail of the interpreter.
+    /// Represents a return value from a function
+    Return(Box<Object>),
+    /// Represents an empty value that is returned by statements, like `if` and `while`
+    Unit,
+}
+
 // Define a trait for callable functions
 pub trait Callable: Debug + Display + 'static {
     fn call(&self, interpreter: &mut Interpreter, args: &[Object]) -> anyhow::Result<Object>;
@@ -120,22 +136,6 @@ impl Display for LoxFunction {
     }
 }
 
-#[derive(Debug, Clone)]
-pub enum Object {
-    True,
-    False,
-    Nil,
-    Number(f64),
-    String(String),
-    Function(Rc<dyn Callable>),
-
-    // Internal Objects. Cannot be stored in variables. They are a implementation detail of the interpreter.
-    /// Represents a return value from a function
-    Return(Box<Object>),
-    /// Represents an empty value that is returned by statements, like `if` and `while`
-    Unit,
-}
-
 impl Object {
     pub fn new_bool(val: bool) -> Self {
         if val {
@@ -159,12 +159,19 @@ impl Object {
         body: Box<Statement>,
         closure: Env,
     ) -> Self {
-        Self::Function(Rc::new(LoxFunction::new(
+        let closure = Rc::new(RefCell::new(closure));
+
+        let func = Self::Function(Rc::new(LoxFunction::new(
             name,
             params,
             body,
-            Rc::new(RefCell::new(closure)),
-        )))
+            Rc::clone(&closure),
+        )));
+
+        // Define the function in the closure environment
+        // This allows the function to be called recursively
+        closure.borrow_mut().define(name, func.clone());
+        func
     }
 
     pub fn is_truthy(&self) -> bool {

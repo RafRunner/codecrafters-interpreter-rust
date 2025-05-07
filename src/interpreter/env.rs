@@ -8,7 +8,7 @@ use super::object::Object;
 #[derive(Debug, Clone)]
 pub struct Env {
     parent: Option<Rc<RefCell<Env>>>,
-    symbols: HashMap<String, Object>,
+    symbols: HashMap<String, Rc<RefCell<Object>>>,
 }
 
 impl Env {
@@ -30,7 +30,7 @@ impl Env {
 
     pub fn get_symbol(&self, identifier: &str) -> Option<Object> {
         if let Some(symbol) = self.symbols.get(identifier) {
-            return Some(symbol.clone());
+            return Some(symbol.borrow().clone());
         }
 
         if let Some(parent) = &self.parent {
@@ -41,12 +41,13 @@ impl Env {
     }
 
     pub fn define(&mut self, identifier: &str, symbol: Object) {
-        self.symbols.insert(identifier.to_owned(), symbol);
+        self.symbols
+            .insert(identifier.to_owned(), Rc::new(RefCell::new(symbol)));
     }
 
     pub fn assign(&mut self, identifier: &str, symbol: Object) -> anyhow::Result<()> {
-        if let Some(existing_symbol) = self.symbols.get_mut(identifier) {
-            *existing_symbol = symbol;
+        if let Some(existing_symbol) = self.symbols.get(identifier) {
+            *existing_symbol.borrow_mut() = symbol;
             return Ok(());
         }
 
@@ -71,11 +72,18 @@ impl Default for Env {
 impl Display for Env {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         for (key, value) in &self.symbols {
-            writeln!(f, "{}: {}", key, value)?;
+            writeln!(f, "{}: {}", key, value.borrow())?;
         }
         if let Some(parent) = &self.parent {
             Display::fmt(&parent.borrow(), f)?;
         }
         Ok(())
+    }
+}
+
+impl Drop for Env {
+    fn drop(&mut self) {
+        self.parent = None;
+        self.symbols.clear();
     }
 }
