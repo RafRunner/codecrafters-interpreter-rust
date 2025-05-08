@@ -1,5 +1,6 @@
 use std::{
     cell::RefCell,
+    io::Write,
     rc::Rc,
     time::{SystemTime, UNIX_EPOCH},
 };
@@ -9,24 +10,17 @@ use crate::ast::{
     FunctionDeclarationStruct, IdentifierStruct, LiteralExpression, Program, Statement,
     StatementType, UnaryOperator,
 };
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Ok, Result};
 
 use super::{env::Env, object::Object};
 
-#[derive(Debug)]
 pub struct Interpreter {
     pub env: Rc<RefCell<Env>>,
-    return_from_stetments: bool,
-}
-
-impl Default for Interpreter {
-    fn default() -> Self {
-        Self::new(false)
-    }
+    output: Rc<RefCell<dyn Write>>,
 }
 
 impl Interpreter {
-    pub fn new(return_from_stetments: bool) -> Self {
+    pub fn new(output: Rc<RefCell<dyn Write>>) -> Self {
         let mut env = Env::new();
         env.define(
             "clock",
@@ -45,27 +39,20 @@ impl Interpreter {
 
         Self {
             env: Rc::new(RefCell::new(env)),
-            return_from_stetments,
+            output,
         }
     }
 
-    pub fn evaluate(&mut self, program: Program) -> Result<Object> {
-        self.evaluate_statements(&program.statements)
+    pub fn evaluate(&mut self, program: Program) -> Result<()> {
+        self.evaluate_statements(&program.statements)?;
+        Ok(())
     }
 
     fn evaluate_statements(&mut self, statements: &[Statement]) -> Result<Object> {
-        let mut output = if self.return_from_stetments {
-            Object::Nil
-        } else {
-            Object::Unit
-        };
+        let mut output = Object::Unit;
 
         for stmt in statements {
             let result = self.execute_statement(stmt)?;
-
-            if self.return_from_stetments {
-                output = result.clone();
-            }
 
             // If we encounter a return statement, propagate it upward
             if matches!(result, Object::Return(_)) {
@@ -79,7 +66,9 @@ impl Interpreter {
 
     pub fn execute_statement(&mut self, stmt: &Statement) -> Result<Object> {
         match &stmt.kind {
-            StatementType::Expression { expr } => self.execute_expression_statement(expr),
+            StatementType::Expression { expr } => self
+                .execute_expression_statement(expr)
+                .map(|_| Object::Unit),
             StatementType::Print { expr } => {
                 self.execute_print_statement(expr).map(|_| Object::Unit)
             }
@@ -102,19 +91,14 @@ impl Interpreter {
     fn execute_expression_statement(
         &mut self,
         expr: &Expression,
-    ) -> std::result::Result<Object, anyhow::Error> {
-        let result = self.execute_expression(expr)?;
-
-        if self.return_from_stetments {
-            Ok(result)
-        } else {
-            Ok(Object::Unit)
-        }
+    ) -> std::result::Result<(), anyhow::Error> {
+        self.execute_expression(expr)?;
+        Ok(())
     }
 
     fn execute_print_statement(&mut self, expr: &Expression) -> Result<()> {
         let to_print = self.execute_expression(expr)?;
-        println!("{}", to_print);
+        writeln!(self.output.borrow_mut(), "{}", to_print)?;
         Ok(())
     }
 
@@ -199,7 +183,7 @@ impl Interpreter {
         Ok(Object::Return(Box::new(value)))
     }
 
-    fn execute_expression(&mut self, expression: &Expression) -> Result<Object> {
+    pub fn execute_expression(&mut self, expression: &Expression) -> Result<Object> {
         match &expression.kind {
             ExpressionType::Literal { literal } => Ok(self.execute_literal_expression(literal)),
             ExpressionType::Unary { operator, expr } => {
@@ -376,12 +360,26 @@ impl Interpreter {
 
 #[cfg(test)]
 mod tests {
-    use crate::parser::parse_program;
+    use crate::parser::{parse_expression, parse_program};
 
     use super::*;
 
-    fn evaluate(program: Program) -> Result<Object> {
-        Interpreter::new(true).evaluate(program)
+    fn execute_expression(input: &str) -> Result<Object> {
+        let expression = parse_expression(input).expect("Error parsing expression");
+        let mut interpreter = Interpreter::new(Rc::new(RefCell::new(Vec::new())));
+
+        interpreter.execute_expression(&expression)
+    }
+
+    fn execute_program(input: &str) -> String {
+        let program = parse_program(input).expect("Error parsing program");
+
+        let buffer = Rc::new(RefCell::new(Vec::new()));
+        let mut interp = Interpreter::new(buffer.clone());
+        interp.evaluate(program).expect("Runtime error on test");
+        let output = String::from_utf8(buffer.borrow().clone()).unwrap();
+
+        output.trim().to_owned()
     }
 
     #[test]
@@ -397,8 +395,12 @@ mod tests {
         ];
 
         for (input, expected) in tests {
-            let program = parse_program(input, true).unwrap();
-            assert_eq!(evaluate(program).unwrap(), expected, "Input: {}", input);
+            assert_eq!(
+                execute_expression(input).unwrap(),
+                expected,
+                "Input: {}",
+                input
+            );
         }
     }
 
@@ -414,8 +416,12 @@ mod tests {
         ];
 
         for (input, expected) in tests {
-            let program = parse_program(input, true).unwrap();
-            assert_eq!(evaluate(program).unwrap(), expected, "Input: {}", input);
+            assert_eq!(
+                execute_expression(input).unwrap(),
+                expected,
+                "Input: {}",
+                input
+            );
         }
     }
 
@@ -441,8 +447,12 @@ mod tests {
         ];
 
         for (input, expected) in tests {
-            let program = parse_program(input, true).unwrap();
-            assert_eq!(evaluate(program).unwrap(), expected, "Input: {}", input);
+            assert_eq!(
+                execute_expression(input).unwrap(),
+                expected,
+                "Input: {}",
+                input
+            );
         }
     }
 
@@ -463,8 +473,12 @@ mod tests {
         ];
 
         for (input, expected) in tests {
-            let program = parse_program(input, true).unwrap();
-            assert_eq!(evaluate(program).unwrap(), expected, "Input: {}", input);
+            assert_eq!(
+                execute_expression(input).unwrap(),
+                expected,
+                "Input: {}",
+                input
+            );
         }
     }
 
@@ -479,8 +493,12 @@ mod tests {
         ];
 
         for (input, expected) in tests {
-            let program = parse_program(input, true).unwrap();
-            assert_eq!(evaluate(program).unwrap(), expected, "Input: {}", input);
+            assert_eq!(
+                execute_expression(input).unwrap(),
+                expected,
+                "Input: {}",
+                input
+            );
         }
     }
 
@@ -497,11 +515,10 @@ mod tests {
             result = false; 
         }
  
-        result
+        print result;
         ";
 
-        let program = parse_program(source, true).unwrap();
-        assert_eq!(evaluate(program).unwrap(), Object::True);
+        assert_eq!(execute_program(source), "true");
 
         let source = "\
         var number1 = 43;
@@ -512,28 +529,23 @@ mod tests {
             result = true;
         }
  
-        result
+        print result;
         ";
 
-        let program = parse_program(source, true).unwrap();
-        assert_eq!(evaluate(program).unwrap(), Object::False);
+        assert_eq!(execute_program(source), "false");
 
-        let source = "\
+        let source = r#"
         var result;
 
         if (2 + 2 * 6 == 24)
-            result = \"wrong\";
+            result = "wrong";
         else
-            result = \"right\";
+            result = "right";
  
-        result
-        ";
+        print result;
+        "#;
 
-        let program = parse_program(source, true).unwrap();
-        assert_eq!(
-            evaluate(program).unwrap(),
-            Object::String("right".to_string())
-        );
+        assert_eq!(execute_program(source), "right");
     }
 
     #[test]
@@ -547,11 +559,10 @@ mod tests {
             i = i + 1;
         }
 
-        sum
+        print sum;
         ";
 
-        let program = parse_program(source, true).unwrap();
-        assert_eq!(evaluate(program).unwrap(), Object::Number(55.0));
+        assert_eq!(execute_program(source), "55");
     }
 
     #[test]
@@ -565,11 +576,10 @@ mod tests {
           a = b;
         }
 
-        a
+        print a;
         ";
 
-        let program = parse_program(source, true).unwrap();
-        assert_eq!(evaluate(program).unwrap(), Object::Number(10946.0));
+        assert_eq!(execute_program(source), "10946");
 
         let source = "\
         var a = 0;
@@ -579,13 +589,12 @@ mod tests {
             a = a + i;
             i = i + 1;
         }
-        a
+        print a;
         ";
-        let program = parse_program(source, true).unwrap();
-        assert_eq!(evaluate(program).unwrap(), Object::Number(45.0));
+        assert_eq!(execute_program(source), "45");
 
-        let source = "\
-        var quz = \"before\";
+        let source = r#"
+        var quz = "before";
 
         for (var quz = 0; quz < 1; quz = quz + 1) {
             print quz;
@@ -593,44 +602,44 @@ mod tests {
             print quz;
         }
 
-        quz
-        ";
+        print quz;
+        "#;
 
-        let program = parse_program(source, true).unwrap();
-        assert_eq!(
-            evaluate(program).unwrap(),
-            Object::String("before".to_string())
-        );
+        let output = execute_program(source);
+        assert_eq!(output, "0\n-1\nbefore");
     }
 
     #[test]
     fn test_evaluate_errors() {
         let tests = vec![
             (
-                "\"hello\" - \"world\"",
+                "\"hello\" - \"world\";",
                 "Binary '-' can only be applied to numbers",
             ),
-            ("5 / 0", "Division by zero is not allowed"),
+            ("5 / 0;", "Division by zero is not allowed"),
             (
-                "37 + \"foo\" + 47",
+                "37 + \"foo\" + 47;",
                 "Binary '+' can only be applied to numbers or concatenated with strings",
             ),
             (
-                "true >= false",
+                "true >= false;",
                 "Binary '>=' can only be applied to numbers",
             ),
-            ("\"hello\"()", "Can only call functions and classes."),
+            ("\"hello\"();", "Can only call functions and classes."),
             ("var time = clock(20);", "Expected 0 arguments but got 1."),
             (
-                "\"hello\" + 5",
+                "\"hello\" + 5;",
                 "Binary '+' can only be applied to numbers or concatenated with strings",
             ),
         ];
 
         for (input, expected_err) in tests {
-            let program = parse_program(input, true).unwrap();
-            let result = evaluate(program);
-            assert!(result.is_err(), "Expression {} should be an error", input);
+            let program = parse_program(input).expect("Error parsing program");
+
+            let mut interp = Interpreter::new(Rc::new(RefCell::new(Vec::new())));
+            let result = interp.evaluate(program);
+
+            assert!(result.is_err(), "Program {} should be an error", input);
             assert_eq!(
                 result.unwrap_err().to_string(),
                 expected_err,
@@ -645,21 +654,19 @@ mod tests {
         let source = "\
         var time = clock();
         var result = time > 0;
-        result
+        print result;
         ";
 
-        let program = parse_program(source, true).unwrap();
-        let result = evaluate(program).unwrap();
-        assert_eq!(result, Object::True);
+        let result = execute_program(source);
+        assert_eq!(result, "true");
 
         let source = "\
         var str = \"hello\" + str(123);
-        str
+        print str;
         ";
 
-        let program = parse_program(source, true).unwrap();
-        let result = evaluate(program).unwrap();
-        assert_eq!(result, Object::String("hello123".to_string()));
+        let result = execute_program(source);
+        assert_eq!(result, "hello123");
     }
 
     #[test]
@@ -670,12 +677,11 @@ mod tests {
             return a + b;
         }
         
-        add(5, 3)
+        print add(5, 3);
         "#;
 
-        let program = parse_program(source, true).unwrap();
-        let result = evaluate(program).unwrap();
-        assert_eq!(result, Object::Number(8.0));
+        let result = execute_program(source);
+        assert_eq!(result, "8");
     }
 
     #[test]
@@ -688,28 +694,26 @@ mod tests {
             return "late";
         }
         
-        earlyReturn()
+        print earlyReturn();
         "#;
 
-        let program = parse_program(source, true).unwrap();
-        let result = evaluate(program).unwrap();
-        assert_eq!(result, Object::String("early".to_string()));
+        let result = execute_program(source);
+        assert_eq!(result, "early");
     }
 
     #[test]
     fn test_implicit_nil_return() {
-        // Test that functions without explicit return statements return nil
+        // Test that functions without explicit return statements return nil and print
         let source = r#"
         fun noReturn() {
             print "No explicit return";
         }
         
-        noReturn()
+        print noReturn();
         "#;
 
-        let program = parse_program(source, true).unwrap();
-        let result = evaluate(program).unwrap();
-        assert_eq!(result, Object::Nil);
+        let result = execute_program(source);
+        assert_eq!(result, "No explicit return\nnil");
     }
 
     #[test]
@@ -725,29 +729,12 @@ mod tests {
             return "never_reaches_here";
         }
         
-        testIfReturn(true)
+        print testIfReturn(true);
+        print testIfReturn(false);
         "#;
 
-        let program = parse_program(source, true).unwrap();
-        let result = evaluate(program).unwrap();
-        assert_eq!(result, Object::String("from_if".to_string()));
-
-        let source = r#"
-        fun testIfReturn(condition) {
-            if (condition) {
-                return "from_if";
-            } else {
-                return "from_else";
-            }
-            return "never_reaches_here";
-        }
-        
-        testIfReturn(false)
-        "#;
-
-        let program = parse_program(source, true).unwrap();
-        let result = evaluate(program).unwrap();
-        assert_eq!(result, Object::String("from_else".to_string()));
+        let result = execute_program(source);
+        assert_eq!(result, "from_if\nfrom_else");
     }
 
     #[test]
@@ -765,32 +752,12 @@ mod tests {
             return "while_completed";
         }
         
-        testWhileReturn(5)
+        print testWhileReturn(5);
+        print testWhileReturn(20);
         "#;
 
-        let program = parse_program(source, true).unwrap();
-        let result = evaluate(program).unwrap();
-        assert_eq!(result, Object::String("while_returned_at_5".to_string()));
-
-        // Test return at the end of a while loop
-        let source = r#"
-        fun testWhileReturn(n) {
-            var i = 0;
-            while (i < 10) {
-                if (i == n) {
-                    return "while_returned_at_" + str(i);
-                }
-                i = i + 1;
-            }
-            return "while_completed";
-        }
-        
-        testWhileReturn(20)
-        "#;
-
-        let program = parse_program(source, true).unwrap();
-        let result = evaluate(program).unwrap();
-        assert_eq!(result, Object::String("while_completed".to_string()));
+        let result = execute_program(source);
+        assert_eq!(result, "while_returned_at_5\nwhile_completed");
     }
 
     #[test]
@@ -806,30 +773,12 @@ mod tests {
             return "for_completed";
         }
         
-        testForReturn(3)
+        print testForReturn(3);
+        print testForReturn(20);
         "#;
 
-        let program = parse_program(source, true).unwrap();
-        let result = evaluate(program).unwrap();
-        assert_eq!(result, Object::String("for_returned_at_3".to_string()));
-
-        // Test return at the end of a for loop
-        let source = r#"
-        fun testForReturn(n) {
-            for (var i = 0; i < 10; i = i + 1) {
-                if (i == n) {
-                    return "for_returned_at_" + str(i);
-                }
-            }
-            return "for_completed";
-        }
-        
-        testForReturn(20)
-        "#;
-
-        let program = parse_program(source, true).unwrap();
-        let result = evaluate(program).unwrap();
-        assert_eq!(result, Object::String("for_completed".to_string()));
+        let result = execute_program(source);
+        assert_eq!(result, "for_returned_at_3\nfor_completed");
     }
 
     #[test]
@@ -859,42 +808,15 @@ mod tests {
             return "no_early_return";
         }
         
-        testNestedReturn(7)
+        print testNestedReturn(9);
+        print testNestedReturn(2);
+        print testNestedReturn(5);
         "#;
 
-        let program = parse_program(source, true).unwrap();
-        let result = evaluate(program).unwrap();
-        assert_eq!(result, Object::String("nested_return_at_7".to_string()));
-
-        let source = r#"
-        fun testNestedReturn(n) {
-            var result = "start";
-            {
-                if (n > 5) {
-                    {
-                        while (n > 0) {
-                            if (n == 7) {
-                                return "nested_return_at_" + str(n);
-                            }
-                            n = n - 1;
-                        }
-                    }
-                } else {
-                    for (var i = 0; i < n; i = i + 1) {
-                        if (i == 3) {
-                            return "nested_loop_return";
-                        }
-                    }
-                }
-            }
-            return "no_early_return";
-        }
-        
-        testNestedReturn(2)
-        "#;
-
-        let program = parse_program(source, true).unwrap();
-        let result = evaluate(program).unwrap();
-        assert_eq!(result, Object::String("no_early_return".to_string()));
+        let result = execute_program(source);
+        assert_eq!(
+            result,
+            "nested_return_at_7\nno_early_return\nnested_loop_return"
+        );
     }
 }

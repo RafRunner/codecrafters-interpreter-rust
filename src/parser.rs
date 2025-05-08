@@ -14,14 +14,32 @@ use crate::{
 };
 
 #[allow(clippy::result_large_err)]
-pub fn parse_program(
-    input: &str,
-    optional_semi_expressions: bool,
-) -> Result<Program, ParserOrTokenError> {
+pub fn parse_program(input: &str) -> Result<Program, ParserOrTokenError> {
     let lexer = Lexer::new(input);
-    let mut parser = Parser::new(lexer, optional_semi_expressions);
+    let mut parser = Parser::new(lexer.iter().peekable());
 
     parser.parse_program()
+}
+
+#[allow(clippy::result_large_err)]
+pub fn parse_expression(input: &str) -> Result<Expression, ParserOrTokenError> {
+    let mut lexer = Lexer::new(input).iter().peekable();
+    let first_token = lexer.next();
+    let mut parser = Parser::new(lexer);
+
+    match first_token {
+        Some(result) => {
+            let token = result?;
+
+            parser.parse_expression(token)
+        }
+        None => Ok(Expression {
+            token: Token::genereted(TokenType::Nil, ""),
+            kind: ExpressionType::Literal {
+                literal: LiteralExpression::Nil,
+            },
+        }),
+    }
 }
 
 /**
@@ -73,16 +91,12 @@ pub fn parse_program(
 
 pub struct Parser<'a> {
     lexer: Peekable<LexerIterator<'a>>,
-    optional_semi_expressions: bool,
 }
 
 #[allow(clippy::result_large_err)]
 impl<'a> Parser<'a> {
-    pub fn new(lexer: Lexer<'a>, optional_semi_expressions: bool) -> Self {
-        Self {
-            lexer: lexer.iter().peekable(),
-            optional_semi_expressions,
-        }
+    pub fn new(lexer: Peekable<LexerIterator<'a>>) -> Self {
+        Self { lexer }
     }
 
     pub fn parse_program(&mut self) -> Result<Program, ParserOrTokenError> {
@@ -373,16 +387,17 @@ impl<'a> Parser<'a> {
     ) -> Result<Statement, ParserOrTokenError> {
         let expression = self.parse_expression(token.clone())?;
 
-        if let Some(Ok(next)) = self.lexer.peek() {
-            if next.kind == TokenType::Semicolon {
+        match self.lexer.peek() {
+            Some(Ok(token)) if token.kind == TokenType::Semicolon => {
                 self.lexer.next();
-            } else if !self.optional_semi_expressions {
+            }
+            _ => {
                 return Err(ParserOrTokenError::Parser(ParserError::new(
                     ParserErrorType::MissingSemicolen,
                     expression.token,
-                )));
+                )))
             }
-        }
+        };
         Ok(Statement::expression(expression))
     }
 
@@ -807,9 +822,16 @@ pub enum ParserErrorType {
 mod tests {
 
     fn parse_program(input: &str) -> String {
-        let program = super::parse_program(input, true).expect("Program did not parse correctly");
+        let program = super::parse_program(input).expect("Program did not parse correctly");
 
         program.to_string()
+    }
+
+    fn parse_expression(input: &str) -> String {
+        let expression =
+            super::parse_expression(input).expect("Expression did not parse correctly");
+
+        expression.to_string()
     }
 
     #[test]
@@ -822,7 +844,7 @@ mod tests {
         ];
 
         for (input, expected) in tests {
-            assert_eq!(parse_program(input), expected, "Input: {}", input);
+            assert_eq!(parse_expression(input), expected, "Input: {}", input);
         }
     }
 
@@ -838,7 +860,7 @@ mod tests {
         ];
 
         for (input, expected) in tests {
-            assert_eq!(parse_program(input), expected, "Input: {}", input);
+            assert_eq!(parse_expression(input), expected, "Input: {}", input);
         }
     }
 
@@ -854,7 +876,7 @@ mod tests {
         ];
 
         for (input, expected) in tests {
-            assert_eq!(parse_program(input), expected, "Input: {}", input);
+            assert_eq!(parse_expression(input), expected, "Input: {}", input);
         }
     }
 
@@ -879,7 +901,7 @@ mod tests {
         ];
 
         for (input, expected) in tests {
-            assert_eq!(parse_program(input), expected, "Input: {}", input);
+            assert_eq!(parse_expression(input), expected, "Input: {}", input);
         }
     }
 
@@ -904,7 +926,7 @@ mod tests {
         ];
 
         for (input, expected) in tests {
-            assert_eq!(parse_program(input), expected, "Input: {}", input);
+            assert_eq!(parse_expression(input), expected, "Input: {}", input);
         }
     }
 
@@ -913,7 +935,7 @@ mod tests {
         let tests = vec![
             ("var name = \"John\";", "var name = John;"),
             ("var Uninitialized;", "var Uninitialized;"),
-            ("variable + 23", "(+ variable 23.0)"),
+            ("variable + 23;", "(+ variable 23.0)"),
         ];
 
         for (input, expected) in tests {

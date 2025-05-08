@@ -70,7 +70,7 @@ impl Statement {
 impl Display for Statement {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match &self.kind {
-            StatementType::Expression { expr } => write!(f, "{}", expr),
+            StatementType::Expression { expr } => write!(f, "{};", expr),
             StatementType::Print { expr } => write!(f, "print {};", expr),
             StatementType::Declaration { stmt } => match stmt {
                 DeclaraionStatement::VarDeclaration { identifier, value } => {
@@ -116,7 +116,7 @@ impl Display for Statement {
             } => {
                 write!(f, "if ({}) {{\n{}}}", condition, then)?;
                 if let Some(else_block) = else_block {
-                    write!(f, "else {{\n{}}}", else_block)?;
+                    write!(f, "\nelse {{\n{}}}", else_block)?;
                 }
 
                 Ok(())
@@ -126,7 +126,7 @@ impl Display for Statement {
             }
             StatementType::Return { expr: value } => write!(
                 f,
-                "return {}",
+                "return {};",
                 if let Some(value) = value {
                     value.to_string()
                 } else {
