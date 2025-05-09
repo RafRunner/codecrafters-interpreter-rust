@@ -935,7 +935,18 @@ mod tests {
         let tests = vec![
             ("var name = \"John\";", "var name = John;"),
             ("var Uninitialized;", "var Uninitialized;"),
-            ("variable + 23;", "(+ variable 23.0)"),
+            ("variable + 23;", "(+ variable 23.0);"),
+            ("var x = 5 + 3;", "var x = (+ 5.0 3.0);"),
+            ("var y = 10;", "var y = 10.0;"),
+            ("var z = x + y;", "var z = (+ x y);"),
+            (
+                r#"
+            fun add(a, b) {
+                return a + b;
+            }
+            "#,
+                "fun add(a, b) {\nreturn (+ a b);\n}",
+            ),
         ];
 
         for (input, expected) in tests {
@@ -947,8 +958,8 @@ mod tests {
     fn parse_block() {
         let tests = vec![
             ("{}", "{\n\n}"),
-            ("{ 1 + 2; }", "{\n(+ 1.0 2.0)\n}"),
-            ("{ 2 * 4; 43 /32; }", "{\n(* 2.0 4.0)\n(/ 43.0 32.0)\n}"),
+            ("{ 1 + 2; }", "{\n(+ 1.0 2.0);\n}"),
+            ("{ 2 * 4; 43 /32; }", "{\n(* 2.0 4.0);\n(/ 43.0 32.0);\n}"),
         ];
 
         for (input, expected) in tests {

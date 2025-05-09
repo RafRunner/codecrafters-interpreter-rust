@@ -819,4 +819,74 @@ mod tests {
             "nested_return_at_7\nno_early_return\nnested_loop_return"
         );
     }
+
+    #[test]
+    fn test_recursive_function() {
+        // Test a recursive function
+        let source = r#"
+        fun factorial(n) {
+            if (n == 0) {
+                return 1;
+            }
+            return n * factorial(n - 1);
+        }
+        
+        print factorial(5);
+        print factorial(0);
+        print factorial(10);
+        "#;
+
+        let result = execute_program(source);
+        assert_eq!(result, "120\n1\n3628800");
+    }
+
+    #[test]
+    fn test_closure() {
+        // Test that closures capture the environment correctly
+        let source = r#"
+        fun makeCounter() {
+            var count = 0;
+            fun counter() {
+                count = count + 1;
+                return count;
+            }
+            return counter;
+        }
+        
+        var counter = makeCounter();
+        print counter();
+        print counter();
+        var count = 10;
+        print counter();
+        "#;
+
+        let result = execute_program(source);
+        assert_eq!(result, "1\n2\n3");
+
+        let source = r#"
+var x = "global";
+
+fun outer() {
+  var x = "outer";
+
+  fun middle() {
+    fun inner() {
+      print x;
+    }
+
+    inner();
+
+    var x = "middle";
+
+    inner();
+  }
+
+  middle();
+}
+
+outer();
+"#;
+        let result = execute_program(source);
+        assert_eq!(result, "outer\nouter");
+    }
 }

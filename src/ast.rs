@@ -85,29 +85,21 @@ impl Display for Statement {
                     params,
                     body,
                 }) => {
-                    write!(
-                        f,
-                        "fun {}({}) {{\n{}}}",
-                        identifier.name,
-                        params
-                            .iter()
-                            .map(|it| it.name.clone())
-                            .collect::<Vec<_>>()
-                            .join(", "),
-                        body
-                    )
+                    let params = params
+                        .iter()
+                        .map(|it| it.name.clone())
+                        .collect::<Vec<_>>()
+                        .join(", ");
+                    write!(f, "fun {}({}) {}", identifier.name, params, body)
                 }
             },
             StatementType::Block { stmts } => {
-                write!(
-                    f,
-                    "{{\n{}\n}}",
-                    stmts
-                        .iter()
-                        .map(|s| s.to_string())
-                        .collect::<Vec<_>>()
-                        .join("\n")
-                )
+                let stmts = stmts
+                    .iter()
+                    .map(|s| s.to_string())
+                    .collect::<Vec<_>>()
+                    .join("\n");
+                write!(f, "{{\n{}\n}}", stmts)
             }
             StatementType::If {
                 condition,
@@ -197,16 +189,12 @@ impl Display for Expression {
                 AssignmentKind::Variable { name } => write!(f, "{} = {}", name, value),
             },
             ExpressionType::Call { calee, arguments } => {
-                write!(
-                    f,
-                    "({}({}))",
-                    calee,
-                    arguments
-                        .iter()
-                        .map(|it| it.to_string())
-                        .collect::<Vec<_>>()
-                        .join(", ")
-                )
+                let arguments = arguments
+                    .iter()
+                    .map(|it| it.to_string())
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                write!(f, "({}({}))", calee, arguments)
             }
         }
     }
@@ -423,6 +411,6 @@ mod tests {
                 }),
             },
         );
-        assert_eq!(stmt.to_string(), "true");
+        assert_eq!(stmt.to_string(), "true;");
     }
 }
