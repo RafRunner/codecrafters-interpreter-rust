@@ -45,7 +45,7 @@ impl<'a> LexerIterator<'a> {
     }
 
     fn if_next(&mut self, test: char, success: TokenType, fail: TokenType) -> TokenType {
-        if self.chars.peek().map_or(false, |&c| c == test) {
+        if self.chars.peek().is_some_and(|&c| c == test) {
             self.consume_char();
             success
         } else {
@@ -135,7 +135,7 @@ impl<'a> Iterator for LexerIterator<'a> {
                                 .chars
                                 .clone()
                                 .nth(1)
-                                .map_or(false, |c| c.is_ascii_digit())
+                                .is_some_and(|c| c.is_ascii_digit())
                             {
                                 // Consume the "."
                                 self.consume_char();

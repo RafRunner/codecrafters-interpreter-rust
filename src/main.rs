@@ -15,7 +15,7 @@ fn main() {
     let args: Vec<String> = env::args().collect();
     if args.len() < 3 {
         eprintln!(
-            "Usage: {} [tokenize | parse | evaluate | run] <filename>",
+            "Usage: {} [tokenize | parse | parse_program | evaluate | run] <filename>",
             args[0]
         );
         return;
@@ -53,6 +53,10 @@ fn main() {
         "parse" => {
             let expr = parse_expression_or_exit(&file_contents);
             println!("{}", expr);
+        }
+        "parse_program" => {
+            let program = parse_program_or_exit(&file_contents);
+            println!("{}", program);
         }
         "evaluate" => {
             let expression = parse_expression_or_exit(&file_contents);

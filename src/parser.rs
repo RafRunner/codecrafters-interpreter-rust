@@ -88,21 +88,24 @@ pub fn parse_expression(input: &str) -> Result<Expression, ParserOrTokenError> {
  * primary        -> NUMBER | STRING | "true" | "false" | "nil"
  *                 | "(" expression ") | IDENTIFIER ;
  */
-
 pub struct Parser<'a> {
     lexer: Peekable<LexerIterator<'a>>,
+    prev_token: Option<Token>,
 }
 
 #[allow(clippy::result_large_err)]
 impl<'a> Parser<'a> {
     pub fn new(lexer: Peekable<LexerIterator<'a>>) -> Self {
-        Self { lexer }
+        Self {
+            lexer,
+            prev_token: None,
+        }
     }
 
     pub fn parse_program(&mut self) -> Result<Program, ParserOrTokenError> {
         let mut program = Program::new();
 
-        while let Some(result) = self.lexer.next() {
+        while let Some(result) = self.next_token() {
             let token = result?;
             let statement = self.parse_declaration(token)?;
 
@@ -121,17 +124,17 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_function_statement(&mut self, token: Token) -> Result<Statement, ParserOrTokenError> {
-        let identifier = self.advance_expecting(&token, TokenType::Identifier, |next| {
+        let identifier = self.advance_expecting(TokenType::Identifier, |next| {
             ParserErrorType::IdentifierExpected {
                 found: next.clone(),
             }
         })?;
 
-        let open_paren = self.advance_expecting_dft(&identifier, TokenType::LeftParen)?;
+        self.advance_expecting_dft(TokenType::LeftParen)?;
 
-        let parameters = self.parse_parameters(&open_paren)?;
+        let parameters = self.parse_parameters()?;
 
-        let next = self.advance(&open_paren)?;
+        let next = self.advance()?;
         let body = self.parse_block_statement(next)?;
 
         Ok(Statement::new(
@@ -149,21 +152,21 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_variable_statement(&mut self, token: Token) -> Result<Statement, ParserOrTokenError> {
-        let identifier = self.advance_expecting(&token, TokenType::Identifier, |next| {
+        let identifier = self.advance_expecting(TokenType::Identifier, |next| {
             ParserErrorType::IdentifierExpected {
                 found: next.clone(),
             }
         })?;
 
-        let next = self.advance(&identifier)?;
+        let next = self.advance()?;
 
         match &next.kind {
             TokenType::Semicolon => Ok(Statement::var_declaration(token, identifier, None)),
             TokenType::Equal => {
-                let next = self.advance(&identifier)?;
+                let next = self.advance()?;
                 let expression = self.parse_expression(next)?;
 
-                self.expect_semi(&expression.token)?;
+                self.expect_semi()?;
 
                 Ok(Statement::var_declaration(
                     token,
@@ -193,10 +196,10 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_print_statement(&mut self, token: Token) -> Result<Statement, ParserOrTokenError> {
-        let next = self.advance(&token)?;
+        let next = self.advance()?;
         let expression = self.parse_expression(next.clone())?;
 
-        self.expect_semi(&expression.token)?;
+        self.expect_semi()?;
         Ok(Statement::new(
             token,
             StatementType::Print { expr: expression },
@@ -207,7 +210,7 @@ impl<'a> Parser<'a> {
         let mut last_token = None;
         let mut stmts = Vec::new();
 
-        while let Some(next) = self.lexer.next() {
+        while let Some(next) = self.next_token() {
             let next = next?;
             last_token = Some(next.clone());
             if next.kind == TokenType::RightBrace {
@@ -228,25 +231,18 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_if_statement(&mut self, token: Token) -> Result<Statement, ParserOrTokenError> {
-        let left_paren = self.advance_expecting_dft(&token, TokenType::LeftParen)?;
-        let next = self.advance(&left_paren)?;
+        self.advance_expecting_dft(TokenType::LeftParen)?;
+        let next = self.advance()?;
         let condition = self.parse_expression(next)?;
-        self.advance_expecting_dft(&condition.token, TokenType::RightParen)?;
+        self.advance_expecting_dft(TokenType::RightParen)?;
 
-        let next = self.advance(&left_paren)?;
+        let next = self.advance()?;
         let then = self.parse_statement(next)?;
 
-        let else_block = if let Some(Ok(next)) = self.lexer.peek() {
-            if next.kind == TokenType::Else {
-                // consume the else
-                let else_tok = self.lexer.next().unwrap().unwrap();
-
-                let next = self.advance(&else_tok)?;
-                let block = self.parse_statement(next)?;
-                Some(Box::new(block))
-            } else {
-                None
-            }
+        let else_block = if self.match_token(TokenType::Else).is_some() {
+            let next = self.advance()?;
+            let block = self.parse_statement(next)?;
+            Some(Box::new(block))
         } else {
             None
         };
@@ -262,12 +258,12 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_return_statement(&mut self, token: Token) -> Result<Statement, ParserOrTokenError> {
-        let next = self.advance(&token)?;
+        let next = self.advance()?;
         let expression = if next.kind == TokenType::Semicolon {
             None
         } else {
             let expr = self.parse_expression(next.clone())?;
-            self.expect_semi(&expr.token)?;
+            self.expect_semi()?;
             Some(expr)
         };
 
@@ -278,12 +274,12 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_while_statement(&mut self, token: Token) -> Result<Statement, ParserOrTokenError> {
-        let open_paren = self.advance_expecting_dft(&token, TokenType::LeftParen)?;
-        let next = self.advance(&open_paren)?;
+        self.advance_expecting_dft(TokenType::LeftParen)?;
+        let next = self.advance()?;
         let condition = self.parse_expression(next)?;
-        let close_paren = self.advance_expecting_dft(&condition.token, TokenType::RightParen)?;
+        self.advance_expecting_dft(TokenType::RightParen)?;
 
-        let next = self.advance(&close_paren)?;
+        let next = self.advance()?;
         let body = self.parse_statement(next)?;
 
         Ok(Statement::new(
@@ -306,11 +302,11 @@ impl<'a> Parser<'a> {
     // }
     fn parse_for_statement(&mut self, token: Token) -> Result<Statement, ParserOrTokenError> {
         let mut stmts = Vec::new();
-        let open_paren = self.advance_expecting_dft(&token, TokenType::LeftParen)?;
+        self.advance_expecting_dft(TokenType::LeftParen)?;
 
         // --- Parse Initializer ---
         // The initializer can be a variable declaration, an expression statement, or empty.
-        let next = self.advance(&open_paren)?;
+        let next = self.advance()?;
         let initializer = match next.kind {
             TokenType::Semicolon => None,
             TokenType::Var => {
@@ -327,29 +323,29 @@ impl<'a> Parser<'a> {
 
         // --- Parse Condition ---
         // The condition is an optional expression followed by a semicolon.
-        let next = self.advance(&open_paren)?;
-        let (condition, condition_semi) = if next.kind == TokenType::Semicolon {
-            (None, next)
+        let next = self.advance()?;
+        let condition = if next.kind == TokenType::Semicolon {
+            None
         } else {
             // Must be an expression or an error
             let expr = self.parse_expression(next)?;
-            let semi = self.expect_semi(&expr.token)?;
-            (Some(expr), semi)
+            self.expect_semi()?;
+            Some(expr)
         };
 
         // --- Parse Increment ---
         // The increment is an optional expression followed by the closing parenthesis.
-        let next = self.advance(&condition_semi)?;
-        let (increment, rparen) = if next.kind == TokenType::RightParen {
-            (None, next)
+        let next = self.advance()?;
+        let increment = if next.kind == TokenType::RightParen {
+            None
         } else {
             let expr = self.parse_expression(next)?;
-            let rparen = self.advance_expecting_dft(&expr.token, TokenType::RightParen)?;
-            (Some(Statement::expression(expr)), rparen)
+            self.advance_expecting_dft(TokenType::RightParen)?;
+            Some(Statement::expression(expr))
         };
 
         // --- Parse Body ---
-        let next = self.advance(&rparen)?;
+        let next = self.advance()?;
         let mut body = self.parse_statement(next)?;
 
         // 1. Add the increment to the end of the body block.
@@ -389,7 +385,7 @@ impl<'a> Parser<'a> {
 
         match self.lexer.peek() {
             Some(Ok(token)) if token.kind == TokenType::Semicolon => {
-                self.lexer.next();
+                self.next_token();
             }
             _ => {
                 return Err(ParserOrTokenError::Parser(ParserError::new(
@@ -408,28 +404,25 @@ impl<'a> Parser<'a> {
     fn parse_assignment(&mut self, token: Token) -> Result<Expression, ParserOrTokenError> {
         let left = self.parse_logic_or(token)?;
 
-        if let Some(Ok(next)) = self.lexer.peek() {
-            if next.kind == TokenType::Equal {
-                let equals = next.clone();
-                self.lexer.next();
-                let next = self.advance(&equals)?;
+        if let Some(next) = self.match_token(TokenType::Equal) {
+            let equals = next.clone();
+            let next = self.advance()?;
 
-                let rigth = self.parse_assignment(next)?;
+            let rigth = self.parse_assignment(next)?;
 
-                return match left.kind {
-                    ExpressionType::Identifier(IdentifierStruct { name }) => Ok(Expression::new(
-                        equals,
-                        ExpressionType::Assignment {
-                            kind: AssignmentKind::Variable { name },
-                            value: Box::new(rigth),
-                        },
-                    )),
-                    _ => Err(ParserOrTokenError::Parser(ParserError::new(
-                        ParserErrorType::InvalidAssignmentTarget,
-                        equals,
-                    ))),
-                };
-            }
+            return match left.kind {
+                ExpressionType::Identifier(IdentifierStruct { name }) => Ok(Expression::new(
+                    equals,
+                    ExpressionType::Assignment {
+                        kind: AssignmentKind::Variable { name },
+                        value: Box::new(rigth),
+                    },
+                )),
+                _ => Err(ParserOrTokenError::Parser(ParserError::new(
+                    ParserErrorType::InvalidAssignmentTarget,
+                    equals,
+                ))),
+            };
         }
 
         Ok(left)
@@ -483,7 +476,7 @@ impl<'a> Parser<'a> {
     fn parse_unary(&mut self, token: Token) -> Result<Expression, ParserOrTokenError> {
         if matches!(token.kind, TokenType::Bang | TokenType::Minus) {
             let operator = token.kind.unary_operator().unwrap();
-            let next_token = self.advance(&token)?;
+            let next_token = self.advance()?;
             let unary = self.parse_unary(next_token)?;
 
             Ok(Expression::new(
@@ -501,36 +494,26 @@ impl<'a> Parser<'a> {
     fn parse_call(&mut self, token: Token) -> Result<Expression, ParserOrTokenError> {
         let mut primary = self.parse_primary(token)?;
 
-        while let Some(Ok(next)) = self.lexer.peek().cloned() {
-            if next.kind == TokenType::LeftParen {
-                self.lexer.next().unwrap().unwrap();
-                let arguments = self.parse_arguments(&next)?;
+        while let Some(next) = self.match_token(TokenType::LeftParen) {
+            let arguments = self.parse_arguments()?;
 
-                primary = Expression::new(
-                    next,
-                    ExpressionType::Call {
-                        calee: Box::new(primary),
-                        arguments,
-                    },
-                );
-            } else {
-                break;
-            }
+            primary = Expression::new(
+                next,
+                ExpressionType::Call {
+                    calee: Box::new(primary),
+                    arguments,
+                },
+            );
         }
 
         Ok(primary)
     }
 
-    fn parse_parameters(
-        &mut self,
-        prev_token: &Token,
-    ) -> Result<Vec<IdentifierStruct>, ParserOrTokenError> {
+    fn parse_parameters(&mut self) -> Result<Vec<IdentifierStruct>, ParserOrTokenError> {
         let mut params = Vec::new();
-        let mut prev_token = prev_token.clone();
 
         loop {
-            let next = self.advance(&prev_token)?;
-            prev_token = next.clone();
+            let next = self.advance()?;
 
             match next.kind {
                 TokenType::RightParen => break,
@@ -548,7 +531,7 @@ impl<'a> Parser<'a> {
                         match tok.kind {
                             TokenType::RightParen => (),
                             TokenType::Comma => {
-                                self.lexer.next().unwrap().unwrap();
+                                self.next_token().unwrap().unwrap();
                             }
                             _ => {
                                 return Err(ParserOrTokenError::Parser(ParserError::new(
@@ -575,15 +558,11 @@ impl<'a> Parser<'a> {
         Ok(params)
     }
 
-    fn parse_arguments(
-        &mut self,
-        prev_token: &Token,
-    ) -> Result<Vec<Expression>, ParserOrTokenError> {
+    fn parse_arguments(&mut self) -> Result<Vec<Expression>, ParserOrTokenError> {
         let mut args = Vec::new();
-        let mut prev_token = prev_token.clone();
 
         loop {
-            let next = self.advance(&prev_token)?;
+            let next = self.advance()?;
             if next.kind == TokenType::RightParen {
                 break;
             }
@@ -597,7 +576,7 @@ impl<'a> Parser<'a> {
             let arg = self.parse_expression(next.clone())?;
             args.push(arg);
 
-            let next = self.advance(&prev_token)?;
+            let next = self.advance()?;
             match &next.kind {
                 TokenType::RightParen => break,
                 TokenType::Comma => (),
@@ -608,8 +587,6 @@ impl<'a> Parser<'a> {
                     )))
                 }
             }
-
-            prev_token = next;
         }
 
         Ok(args)
@@ -618,10 +595,10 @@ impl<'a> Parser<'a> {
     fn parse_primary(&mut self, token: Token) -> Result<Expression, ParserOrTokenError> {
         match &token.kind {
             TokenType::LeftParen => {
-                let next_token = self.advance(&token)?;
+                let next_token = self.advance()?;
                 let inner = self.parse_expression(next_token)?;
 
-                self.advance_expecting(&inner.token, TokenType::RightParen, |_| {
+                self.advance_expecting(TokenType::RightParen, |_| {
                     ParserErrorType::UnmatchedParenthesis
                 })?;
                 Ok(Expression::new(
@@ -670,10 +647,10 @@ impl<'a> Parser<'a> {
 
         while let Some(Ok(tok)) = self.lexer.peek() {
             if operators.contains(&tok.kind) {
-                let operation = self.lexer.next().unwrap().unwrap();
+                let operation = self.next_token().unwrap().unwrap();
                 let operator = operation.kind.binary_operator().unwrap();
                 let right = self
-                    .advance(&operation)
+                    .advance()
                     .and_then(|next_token| parse_lower(self, next_token))?;
 
                 left = Expression::new(
@@ -692,26 +669,27 @@ impl<'a> Parser<'a> {
         Ok(left)
     }
 
-    fn advance(&mut self, prev_token: &Token) -> Result<Token, ParserOrTokenError> {
-        match self.lexer.next() {
+    fn advance(&mut self) -> Result<Token, ParserOrTokenError> {
+        match self.next_token() {
             Some(result) => result.map_err(ParserOrTokenError::Token),
             None => Err(ParserOrTokenError::Parser(ParserError::new(
                 ParserErrorType::UnexpectedEof,
-                prev_token.clone(),
+                self.prev_token
+                    .clone()
+                    .expect("advanced called before consuming any tokens"),
             ))),
         }
     }
 
     fn advance_expecting<F>(
         &mut self,
-        prev_token: &Token,
         expected: TokenType,
         error: F,
     ) -> Result<Token, ParserOrTokenError>
     where
         F: FnOnce(&Token) -> ParserErrorType,
     {
-        let next = self.advance(prev_token)?;
+        let next = self.advance()?;
         if next.kind == expected {
             Ok(next)
         } else {
@@ -722,23 +700,31 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn advance_expecting_dft(
-        &mut self,
-        prev_token: &Token,
-        expected: TokenType,
-    ) -> Result<Token, ParserOrTokenError> {
-        self.advance_expecting(prev_token, expected.clone(), |tok| {
-            ParserErrorType::ExpectedNotFound {
-                expected,
-                found: tok.kind.clone(),
-            }
+    fn advance_expecting_dft(&mut self, expected: TokenType) -> Result<Token, ParserOrTokenError> {
+        self.advance_expecting(expected.clone(), |tok| ParserErrorType::ExpectedNotFound {
+            expected,
+            found: tok.kind.clone(),
         })
     }
 
-    fn expect_semi(&mut self, prev_token: &Token) -> Result<Token, ParserOrTokenError> {
-        self.advance_expecting(prev_token, TokenType::Semicolon, |_| {
-            ParserErrorType::MissingSemicolen
-        })
+    fn expect_semi(&mut self) -> Result<Token, ParserOrTokenError> {
+        self.advance_expecting(TokenType::Semicolon, |_| ParserErrorType::MissingSemicolen)
+    }
+
+    fn next_token(&mut self) -> Option<Result<Token, TokenError>> {
+        let next = self.lexer.next();
+        if let Some(Ok(tok)) = &next {
+            self.prev_token = Some(tok.clone());
+        }
+        next
+    }
+
+    fn match_token(&mut self, kind: TokenType) -> Option<Token> {
+        if matches!(self.lexer.peek(), Some(Ok(t)) if t.kind == kind) {
+            self.next_token().and_then(Result::ok)
+        } else {
+            None
+        }
     }
 }
 
